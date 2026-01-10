@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCost, Message } from "../types";
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
+import { decodeHtmlEntities } from './text';
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'qwen2.5:7b-instruct';
@@ -89,18 +90,6 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
   } catch (e) {
     console.warn('Ollama similarity fallback failed:', e);
     return [];
-  }
-};
-
-const decodeHtmlEntities = (input: string): string => {
-  // Handles strings like "it&#39;s" coming from HTML-encoded sources.
-  try {
-    if (typeof document === 'undefined') return input;
-    const el = document.createElement('textarea');
-    el.innerHTML = input;
-    return el.value;
-  } catch {
-    return input;
   }
 };
 
@@ -264,42 +253,97 @@ const analysisSchema: Schema = {
   required: ["category", "sentiment", "predictedCost", "tags"]
 };
 
-const similaritySchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    similarIds: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "List of IDs of messages that are semantically similar to the target message."
-    }
-  },
-  required: ["similarIds"]
+const heuristicAnalyze = (text: string): AnalysisResult => {
+  const raw = decodeHtmlEntities(text || '');
+  const t = raw.toLowerCase();
+
+  // Returns
+  if (/(return|refund|exchange|rma|send\s+back|wrong\s+item|cancel\s+my\s+order)/i.test(t)) {
+    return {
+      category: MessageCategory.Returns,
+      sentiment: /(angry|upset|unacceptable|terrible|worst|mad|furious|fraud|scam)/i.test(t)
+        ? Sentiment.Negative
+        : Sentiment.Neutral,
+      predictedCost: /(chargeback|dispute|fraud|scam)/i.test(t) ? ResponseCost.High : ResponseCost.Medium,
+      tags: ['Return', 'Refund'].filter(Boolean),
+    };
+  }
+
+  // Shipping
+  if (/(where\s+is\s+my\s+order|tracking|shipment|shipping|deliver|delivery|arrive|eta|package|lost|late|delay|carrier|usps|ups|fedex)/i.test(t)) {
+    return {
+      category: MessageCategory.Shipping,
+      sentiment: /(angry|upset|unacceptable|terrible|worst|mad|furious)/i.test(t)
+        ? Sentiment.Negative
+        : Sentiment.Neutral,
+      predictedCost: /(lost|stolen|missing|never\s+arrived)/i.test(t) ? ResponseCost.Medium : ResponseCost.Low,
+      tags: ['Tracking', 'Delivery'].filter(Boolean),
+    };
+  }
+
+  // Custom requests
+  if (/(custom|personaliz|engrave|size\s+change|modify|different\s+color|rush\s+order|special\s+request)/i.test(t)) {
+    return {
+      category: MessageCategory.Custom,
+      sentiment: Sentiment.Neutral,
+      predictedCost: ResponseCost.Medium,
+      tags: ['Custom'].filter(Boolean),
+    };
+  }
+
+  // Complaints
+  if (/(broken|damaged|defect|doesn\'?t\s+work|not\s+working|terrible|worst|unhappy|angry|upset|disappointed|complain)/i.test(t)) {
+    return {
+      category: MessageCategory.Complaint,
+      sentiment: Sentiment.Negative,
+      predictedCost: ResponseCost.High,
+      tags: ['Complaint'].filter(Boolean),
+    };
+  }
+
+  // Product questions
+  if (/(material|dimensions?|size\s+chart|how\s+big|does\s+it\s+fit|ingredients?|compatible|warranty|care\s+instructions|how\s+to\s+use)/i.test(t)) {
+    return {
+      category: MessageCategory.Product,
+      sentiment: Sentiment.Neutral,
+      predictedCost: ResponseCost.Low,
+      tags: ['Product'].filter(Boolean),
+    };
+  }
+
+  return {
+    category: MessageCategory.General,
+    sentiment: Sentiment.Neutral,
+    predictedCost: ResponseCost.Low,
+    tags: [],
+  };
+};
+
+const isDefaultAnalysis = (a: AnalysisResult): boolean => {
+  return (
+    a.category === MessageCategory.General &&
+    a.sentiment === Sentiment.Neutral &&
+    a.predictedCost === ResponseCost.Low &&
+    (a.tags?.length ?? 0) === 0
+  );
 };
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
   try {
+    const heuristic = heuristicAnalyze(text);
+
     // If we recently hit quota, don't keep retrying on every render.
     if (Date.now() < geminiCooldownUntilMs) {
       const ollama = await analyzeWithOllama(text);
-      if (ollama) return ollama;
-      return {
-        category: MessageCategory.General,
-        sentiment: Sentiment.Neutral,
-        predictedCost: ResponseCost.Low,
-        tags: [],
-      };
+      if (ollama && !isDefaultAnalysis(ollama)) return ollama;
+      return heuristic;
     }
 
     const genAI = getGenAI();
     if (!genAI) {
       const ollama = await analyzeWithOllama(text);
-      if (ollama) return ollama;
-      return {
-        category: MessageCategory.General,
-        sentiment: Sentiment.Neutral,
-        predictedCost: ResponseCost.Low,
-        tags: [],
-      };
+      if (ollama && !isDefaultAnalysis(ollama)) return ollama;
+      return heuristic;
     }
     const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash",
@@ -314,7 +358,11 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
     });
 
     const result = JSON.parse(response.text || "{}");
-    return result as AnalysisResult;
+    const parsed = result as AnalysisResult;
+    if (parsed && !isDefaultAnalysis(parsed)) return parsed;
+    const ollama = await analyzeWithOllama(text);
+    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
+    return heuristic;
   } catch (error) {
     if (isQuota429(error)) {
       const retryDelayMs = getRetryDelayMsFromError(error) ?? 30_000;
@@ -330,13 +378,8 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
     }
     // Fallback if API fails
     const ollama = await analyzeWithOllama(text);
-    if (ollama) return ollama;
-    return {
-      category: MessageCategory.General,
-      sentiment: Sentiment.Neutral,
-      predictedCost: ResponseCost.Low,
-      tags: []
-    };
+    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
+    return heuristicAnalyze(text);
   }
 };
 

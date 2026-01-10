@@ -1,5 +1,3 @@
-import { supabase } from './supabaseClient';
-
 const ETSY_CLIENT_ID = import.meta.env.VITE_ETSY_CLIENT_ID;
 const REDIRECT_URI = window.location.origin + '/auth/etsy/callback';
 
