@@ -1,4 +1,3 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCost, Message } from "../types";
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
@@ -166,93 +165,6 @@ const analyzeWithOllama = async (text: string): Promise<AnalysisResult | null> =
   }
 };
 
-// Initialize Gemini Client
-let genAIInstance: GoogleGenAI | null = null;
-let warnedMissingKey = false;
-let warnedQuota = false;
-let geminiCooldownUntilMs = 0;
-
-const getRetryDelayMsFromError = (error: unknown): number | null => {
-  // `@google/genai` ApiError often stringifies the JSON error payload into `message`.
-  const message = (error as any)?.message;
-  if (typeof message !== 'string') return null;
-
-  try {
-    const parsed = JSON.parse(message);
-    const retryDelay = parsed?.error?.details?.find((d: any) => d?.['@type']?.includes('RetryInfo'))?.retryDelay;
-    if (typeof retryDelay === 'string' && retryDelay.endsWith('s')) {
-      const seconds = Number(retryDelay.slice(0, -1));
-      if (Number.isFinite(seconds) && seconds > 0) return Math.round(seconds * 1000);
-    }
-  } catch {
-    // ignore
-  }
-
-  // Fallback: scrape "Please retry in XXs" if present.
-  const match = message.match(/retry in\s+([0-9]+(?:\.[0-9]+)?)s/i);
-  if (match?.[1]) {
-    const seconds = Number(match[1]);
-    if (Number.isFinite(seconds) && seconds > 0) return Math.round(seconds * 1000);
-  }
-
-  return null;
-};
-
-const isQuota429 = (error: unknown): boolean => {
-  const message = (error as any)?.message;
-  if (typeof message === 'string') {
-    return message.includes('"code":429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('Quota exceeded');
-  }
-  return false;
-};
-const getGenAI = () => {
-  if (!genAIInstance) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-    // If the key isn't configured, don't create a client with a dummy key.
-    // That would cause every request to fail and spam fallback UI.
-    if (!apiKey) {
-      if (!warnedMissingKey) {
-        warnedMissingKey = true;
-        console.warn(
-          "Missing VITE_GEMINI_API_KEY. Gemini features are disabled until it's set.",
-        );
-      }
-      return null;
-    }
-
-    genAIInstance = new GoogleGenAI({ apiKey });
-  }
-  return genAIInstance;
-};
-
-const analysisSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    category: {
-      type: Type.STRING,
-      enum: Object.values(MessageCategory),
-      description: "The primary category of the message."
-    },
-    sentiment: {
-      type: Type.STRING,
-      enum: Object.values(Sentiment),
-      description: "The emotional tone of the message."
-    },
-    predictedCost: {
-      type: Type.STRING,
-      enum: Object.values(ResponseCost),
-      description: "Estimated effort/complexity to respond. Low for FAQs, High for disputes/complex custom requests."
-    },
-    tags: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Up to 3 keywords describing the specific issue (e.g., 'Tracking', 'Broken Item', 'Pricing')."
-    }
-  },
-  required: ["category", "sentiment", "predictedCost", "tags"]
-};
-
 const heuristicAnalyze = (text: string): AnalysisResult => {
   const raw = decodeHtmlEntities(text || '');
   const t = raw.toLowerCase();
@@ -329,57 +241,63 @@ const isDefaultAnalysis = (a: AnalysisResult): boolean => {
 };
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
+  const heuristic = heuristicAnalyze(text);
   try {
-    const heuristic = heuristicAnalyze(text);
+    const ollama = await analyzeWithOllama(text);
+    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
+  } catch (e) {
+    console.warn('Ollama analyze failed; using heuristic:', e);
+  }
+  return heuristic;
+};
 
-    // If we recently hit quota, don't keep retrying on every render.
-    if (Date.now() < geminiCooldownUntilMs) {
-      const ollama = await analyzeWithOllama(text);
-      if (ollama && !isDefaultAnalysis(ollama)) return ollama;
-      return heuristic;
-    }
+const generateDraftWithOllama = async (
+  messageText: string,
+  senderName: string,
+  policies: BusinessPolicy[],
+): Promise<string | null> => {
+  try {
+    const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
+    const url = `${base}/api/chat`;
+    const model = await getOllamaChatModel();
+    const policyContext = policies
+      .map((p) => `${p.title}: ${p.content}`)
+      .join('\n\n')
+      .slice(0, 6000);
 
-    const genAI = getGenAI();
-    if (!genAI) {
-      const ollama = await analyzeWithOllama(text);
-      if (ollama && !isDefaultAnalysis(ollama)) return ollama;
-      return heuristic;
-    }
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Analyze the following customer support message coming into an inbox for a small business owner.
-      
-      Message: "${text}"`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema,
-        systemInstruction: "You are an expert at customer support triage. Be precise."
-      }
+    const payload = {
+      model,
+      stream: false,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Say replies just like you\'re 50 cent rapping but still be endearing and respectful. Don\'t mention that you\'re 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use Lower East Siders & Co. as a name',
+        },
+        {
+          role: 'user',
+          content:
+            `Customer name: ${senderName}\n` +
+            `Message: ${decodeHtmlEntities(messageText || '').slice(0, 1500)}\n\n` +
+            `Business policies (reference as needed):\n${policyContext}\n\n` +
+            `Write the reply.`,
+        },
+      ],
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-
-    const result = JSON.parse(response.text || "{}");
-    const parsed = result as AnalysisResult;
-    if (parsed && !isDefaultAnalysis(parsed)) return parsed;
-    const ollama = await analyzeWithOllama(text);
-    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
-    return heuristic;
-  } catch (error) {
-    if (isQuota429(error)) {
-      const retryDelayMs = getRetryDelayMsFromError(error) ?? 30_000;
-      geminiCooldownUntilMs = Date.now() + retryDelayMs;
-      if (!warnedQuota) {
-        warnedQuota = true;
-        console.warn(
-          `Gemini quota exceeded (429). Pausing AI calls for ~${Math.ceil(retryDelayMs / 1000)}s.`,
-        );
-      }
-    } else {
-      console.error("Gemini Analysis Failed", error);
-    }
-    // Fallback if API fails
-    const ollama = await analyzeWithOllama(text);
-    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
-    return heuristicAnalyze(text);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const content: string | undefined = json?.message?.content;
+    if (!content) return null;
+    return content.trim();
+  } catch (e) {
+    console.warn('Ollama draft failed:', e);
+    return null;
   }
 };
 
@@ -388,46 +306,45 @@ export const generateDraftReply = async (
   senderName: string,
   policies: BusinessPolicy[]
 ): Promise<string> => {
-  try {
-    const policyContext = policies.map(p => `${p.title}: ${p.content}`).join('\n\n');
-    const genAI = getGenAI();
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Customer Name: ${senderName}
-      Message: "${messageText}"
-      
-      Relevant Business Policies:
-      ${policyContext}
-      
-      Instructions:
-      Draft a friendly, professional, and concise response. 
-      Use the provided policies to answer specific questions (e.g., shipping times, returns).
-      If the user is angry, be empathetic and apologetic but firm on policy if needed.
-      Keep it short (under 150 words).
-      Do not include placeholders like "[Your Name]" unless absolutely necessary, assume the signature is handled by the system.`
-    });
+  const draft = await generateDraftWithOllama(messageText, senderName, policies);
+  if (draft) return draft;
 
-    return response.text || "Could not generate draft.";
-  } catch (error) {
-    console.error("Gemini Draft Failed", error);
-    return "Error generating draft. Please write manually.";
-  }
+  // Fallback: simple, professional template (deterministic)
+  return (
+    `Hi ${senderName || 'there'},\n\n` +
+    `Thanks for reaching out. I’m looking into this now and will help get it resolved. ` +
+    `Could you confirm your order number and any relevant details (e.g., tracking number or photos if applicable)?\n\n` +
+    `Thanks!`
+  );
 };
 
 export const findSimilarMessages = async (
   target: Message,
   candidates: Message[]
 ): Promise<string[]> => {
-  // Filter locally first.
-  // If categories are still defaulted to General, don't restrict by category.
-  const restrictByCategory = !!target.category && target.category !== MessageCategory.General;
-  const potentialMatches = candidates.filter((m) => {
-    if (m.id === target.id) return false;
-    if (restrictByCategory && m.category !== target.category) return false;
-    return true;
-  });
+  // Compare against all other messages.
+  // We *prefer* same-category matches (for quality/speed) but we do not restrict,
+  // because categorization can be wrong/unfinished and it hides valid duplicates.
+  const withoutTarget = candidates.filter((m) => m.id !== target.id);
+  if (withoutTarget.length === 0) return [];
 
-  if (potentialMatches.length === 0) return [];
+  let potentialMatches = withoutTarget;
+  const shouldPreferCategory =
+    !!target.category && target.category !== MessageCategory.General;
+
+  if (shouldPreferCategory) {
+    const sameCategory = withoutTarget.filter((m) => m.category === target.category);
+    const otherCategory = withoutTarget.filter((m) => m.category !== target.category);
+    potentialMatches = [...sameCategory, ...otherCategory];
+  }
+
+  // Hard cap to keep embeddings + Ollama prompts fast.
+  potentialMatches = potentialMatches.slice(0, 50);
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `FindSimilar: pool=${candidates.length}, comparing=${potentialMatches.length}, preferCategory=${shouldPreferCategory ? String(target.category) : 'none'}`,
+  );
 
   // Deterministic exact-duplicate match (covers the "literally duplicate" case)
   const targetNorm = normalizeForExactMatch(target.body);
