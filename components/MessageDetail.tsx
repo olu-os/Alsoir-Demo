@@ -13,7 +13,8 @@ interface MessageDetailProps {
 }
 
 const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent }) => {
-  const [replyText, setReplyText] = useState('');
+    const [replyText, setReplyText] = useState('');
+    const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFindingSimilar, setIsFindingSimilar] = useState(false);
   const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
@@ -22,23 +23,33 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
   const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: string[] }>({});
   const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
 
-  useEffect(() => {
-    setReplyText('');
-    setIsGenerating(false);
-    setSimilarMessages([]);
-    setSelectedSimilarIds(new Set());
-    
-    // Optional: Auto-check for similar messages if it's a common category
-    // For now, we rely on user button click to save API calls in demo
-  }, [message?.id]);
+    // Only reset similarMessages and selectedSimilarIds when switching messages
+    useEffect(() => {
+        if (message?.id) {
+            setReplyText(drafts[message.id] || '');
+        } else {
+            setReplyText('');
+        }
+        setIsGenerating(false);
+        setSimilarMessages([]);
+        setSelectedSimilarIds(new Set());
+    }, [message?.id]);
 
-  const handleGenerateReply = async () => {
-    if (!message) return;
-    setIsGenerating(true);
-    const draft = await generateDraftReply(message.body, message.senderName, policies);
-    setReplyText(draft);
-    setIsGenerating(false);
-  };
+    // Update replyText when drafts change, but do not reset similarMessages
+    useEffect(() => {
+        if (message?.id) {
+            setReplyText(drafts[message.id] || '');
+        }
+    }, [drafts, message?.id]);
+
+    const handleGenerateReply = async () => {
+        if (!message) return;
+        setIsGenerating(true);
+        const draft = await generateDraftReply(message.body, message.senderName, policies);
+        setReplyText(draft);
+        setDrafts(prev => ({ ...prev, [message.id]: draft }));
+        setIsGenerating(false);
+    };
 
   const handleFindSimilar = async () => {
     if (!message) return;
@@ -115,21 +126,44 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     setTimeout(() => setShowTaskToast(false), 3000);
   };
 
-  const handleSend = () => {
-      if(!message) return;
-      const idsToSend = [message.id, ...Array.from(selectedSimilarIds)];
-      onReplySent(idsToSend, replyText);
-      
-      // Add reply to all messages it's being sent to
-      const updatedReplies = { ...sentRepliesByMessage };
-      idsToSend.forEach(id => {
-        updatedReplies[id] = [...(updatedReplies[id] || []), replyText];
-      });
-      setSentRepliesByMessage(updatedReplies);
-      
-      setReplyText('');
-      setSimilarMessages([]);
-  }
+    const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
+    const [draftsGeneratedFor, setDraftsGeneratedFor] = useState<string[]>([]);
+
+    const handleSend = () => {
+        if (!message) return;
+        onReplySent([message.id], replyText);
+        // Add reply to this message's sentRepliesByMessage
+        const updatedReplies = { ...sentRepliesByMessage };
+        updatedReplies[message.id] = [...(updatedReplies[message.id] || []), replyText];
+        setSentRepliesByMessage(updatedReplies);
+        setDrafts(prev => {
+            const newDrafts = { ...prev };
+            delete newDrafts[message.id];
+            return newDrafts;
+        });
+        setReplyText('');
+        setSimilarMessages([]);
+        setDraftsGeneratedFor([]);
+    };
+
+    const handleGenerateDrafts = async () => {
+        if (!message) return;
+        setIsGeneratingDrafts(true);
+        const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+        const newDrafts = { ...drafts };
+        for (const id of allIds) {
+            const msg = allMessages.find(m => m.id === id);
+            if (msg) {
+                const draft = await generateDraftReply(msg.body, msg.senderName, policies);
+                newDrafts[id] = draft;
+            }
+        }
+        setDrafts(newDrafts);
+        setReplyText('');
+        setSimilarMessages([]);
+        setIsGeneratingDrafts(false);
+        setDraftsGeneratedFor(allIds);
+    };
 
   if (!message) {
     return (
@@ -261,6 +295,29 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         ))}
                     </div>
                 </div>
+                {/* Generate Drafts Button */}
+                <div className="flex justify-end mt-4">
+                    <button
+                        onClick={async () => {
+                            if (!message) return;
+                            const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+                            const newDrafts = { ...drafts };
+                            for (const id of allIds) {
+                                const msg = allMessages.find(m => m.id === id);
+                                if (msg) {
+                                    const draft = await generateDraftReply(msg.body, msg.senderName, policies);
+                                    newDrafts[id] = draft;
+                                }
+                            }
+                            setDrafts(newDrafts);
+                            setReplyText('');
+                            setSimilarMessages([]);
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm font-medium"
+                    >
+                        Generate Drafts for Selected
+                    </button>
+                </div>
             </div>
         )}
       </div>
@@ -301,43 +358,73 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             </div>
 
             <div className="relative">
-                <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    placeholder="Type your reply here..."
-                    className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm leading-relaxed"
-                />
+                                <textarea
+                                        value={replyText}
+                                        onChange={(e) => {
+                                            setReplyText(e.target.value);
+                                            if (message?.id) {
+                                                setDrafts(prev => ({ ...prev, [message.id]: e.target.value }));
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSend();
+                                            }
+                                        }}
+                                        placeholder="Type your reply here..."
+                                        className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm leading-relaxed"
+                                />
                 <div className="absolute bottom-3 left-3 flex items-center space-x-2">
                     <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
                         <Paperclip className="w-4 h-4" />
                     </button>
                 </div>
                 <div className="absolute bottom-3 right-3">
-                    <button 
-                        onClick={handleSend}
-                        disabled={!replyText.trim()}
-                        className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <span>
-                            {selectedSimilarIds.size > 0 
-                                ? `Send to ${selectedSimilarIds.size + 1} Recipients` 
-                                : 'Send'
-                            }
-                        </span>
-                        <Send className="w-4 h-4" />
-                    </button>
+                    {(() => {
+                        const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+                        const allDraftsExist = allIds.every(id => drafts[id]);
+                        if (!allDraftsExist) {
+                            return (
+                                <button
+                                    onClick={handleGenerateDrafts}
+                                    disabled={isGeneratingDrafts}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span>
+                                        {selectedSimilarIds.size > 0
+                                            ? `Generate Draft for ${selectedSimilarIds.size + 1} Recipients`
+                                            : 'Generate Draft'}
+                                    </span>
+                                    <Sparkles className="w-4 h-4" />
+                                </button>
+                            );
+                        } else {
+                            return (
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!replyText.trim()}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span>Send</span>
+                                    <Send className="w-4 h-4" />
+                                </button>
+                            );
+                        }
+                    })()}
                 </div>
             </div>
             
             <div className="mt-2 text-xs text-slate-400 flex justify-between">
                 <span>Press Enter to send, Shift + Enter for new line</span>
-                {selectedSimilarIds.size > 0 && <span className="text-indigo-600 font-medium">✨ Bulk reply active</span>}
+                {(() => {
+                    const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+                    const allDraftsExist = allIds.every(id => drafts[id]);
+                    if (selectedSimilarIds.size > 0 && !allDraftsExist) {
+                        return <span className="text-indigo-600 font-medium">✨ Bulk reply active</span>;
+                    }
+                    return null;
+                })()}
             </div>
         </div>
       </div>
