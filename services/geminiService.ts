@@ -3,7 +3,7 @@ import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
-const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'qwen2.5:7b-instruct';
+const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
 
 let cachedOllamaModel: string | null = null;
 const getOllamaChatModel = async (): Promise<string> => {
@@ -101,41 +101,31 @@ const normalizeForExactMatch = (input: string): string => {
     .trim();
 };
 
-const analyzeWithOllama = async (text: string): Promise<AnalysisResult | null> => {
+
+const ALLOWED_CATEGORIES = [
+  'Shipping',
+  'Returns',
+  'Product',
+  'Custom',
+  'Complaint',
+  'General',
+  'Other',
+];
+
+async function categorizeWithOllama(text: string): Promise<AnalysisResult | null> {
   try {
     const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
     const url = `${base}/api/chat`;
     const model = await getOllamaChatModel();
-
-    const allowedCategories = Object.values(MessageCategory);
-    const allowedSentiments = Object.values(Sentiment);
-    const allowedCosts = Object.values(ResponseCost);
-
+    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.\n\nMessage: "${text}"\n\nRespond ONLY with a valid JSON object: {"category": "<category>", "reason": "<short reason>"}`;
     const payload = {
       model,
       stream: false,
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are an expert customer support triage assistant. Return ONLY valid JSON, with no extra text.'
-        },
-        {
-          role: 'user',
-          content:
-            `Analyze this customer support message for a small online business.\n` +
-            `Message: "${(text || '').slice(0, 1200)}"\n\n` +
-            `Return ONLY JSON with exactly these keys:\n` +
-            `{\n` +
-            `  "category": one of ${JSON.stringify(allowedCategories)},\n` +
-            `  "sentiment": one of ${JSON.stringify(allowedSentiments)},\n` +
-            `  "predictedCost": one of ${JSON.stringify(allowedCosts)},\n` +
-            `  "tags": array of 0-3 short keywords\n` +
-            `}`
-        }
-      ]
+        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
+        { role: 'user', content: prompt },
+      ],
     };
-
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -145,25 +135,30 @@ const analyzeWithOllama = async (text: string): Promise<AnalysisResult | null> =
     const json: any = await res.json();
     const content: string | undefined = json?.message?.content;
     if (!content) return null;
-
-    const parsed: any = JSON.parse(content);
-
-    const category = allowedCategories.includes(parsed?.category) ? parsed.category : MessageCategory.General;
-    const sentiment = allowedSentiments.includes(parsed?.sentiment) ? parsed.sentiment : Sentiment.Neutral;
-    const predictedCost = allowedCosts.includes(parsed?.predictedCost) ? parsed.predictedCost : ResponseCost.Low;
-    const tags = Array.isArray(parsed?.tags)
-      ? parsed.tags.filter((t: any) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean).slice(0, 3)
-      : [];
-
-    // eslint-disable-next-line no-console
-    console.log('Ollama triage model used:', model);
-
-    return { category, sentiment, predictedCost, tags };
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      // Try to extract JSON from text if model added extra text
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return null; }
+      } else {
+        return null;
+      }
+    }
+    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
+    return {
+      category: category as MessageCategory,
+      sentiment: Sentiment.Neutral,
+      predictedCost: ResponseCost.Low,
+      tags: [category],
+    };
   } catch (e) {
-    console.warn('Ollama triage failed:', e);
+    console.warn('Ollama categorization failed:', e);
     return null;
   }
-};
+}
 
 const heuristicAnalyze = (text: string): AnalysisResult => {
   const raw = decodeHtmlEntities(text || '');
@@ -241,14 +236,23 @@ const isDefaultAnalysis = (a: AnalysisResult): boolean => {
 };
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
+  // Try AI categorization first
+  const aiResult = await categorizeWithOllama(text);
+  if (aiResult) return aiResult;
+
+  // Fallback to heuristic if AI fails
   const heuristic = heuristicAnalyze(text);
-  try {
-    const ollama = await analyzeWithOllama(text);
-    if (ollama && !isDefaultAnalysis(ollama)) return ollama;
-  } catch (e) {
-    console.warn('Ollama analyze failed; using heuristic:', e);
+  if (!isDefaultAnalysis(heuristic)) {
+    return heuristic;
   }
-  return heuristic;
+
+  // Fallback to General
+  return {
+    category: MessageCategory.General,
+    sentiment: Sentiment.Neutral,
+    predictedCost: ResponseCost.Low,
+    tags: [],
+  };
 };
 
 const generateDraftWithOllama = async (

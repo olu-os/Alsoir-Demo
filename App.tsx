@@ -12,61 +12,6 @@ import { analyzeMessageContent } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
 
-const BUSINESS_KEYWORDS = [
-  'order',
-  'purchase',
-  'invoice',
-  'receipt',
-  'billing',
-  'charge',
-  'tracking',
-  'shipment',
-  'shipping',
-  'delivery',
-  'delivered',
-  'eta',
-  'return',
-  'refund',
-  'exchange',
-  'replacement',
-  'cancel',
-  'cancellation',
-  'address',
-  'support',
-  'help',
-  'issue',
-  'problem',
-  'broken',
-  'damaged',
-  'missing',
-  'late',
-  'delay',
-  'complaint',
-  'warranty',
-  'subscription',
-];
-
-const normalizeForKeywordMatch = (input: string): string =>
-  (input || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[“”‘’]/g, "'")
-    .trim();
-
-const isBusinessRelevant = (subject?: string, body?: string): boolean => {
-  const text = normalizeForKeywordMatch(`${subject || ''}\n${body || ''}`);
-  if (!text) return false;
-  return BUSINESS_KEYWORDS.some((kw) => text.includes(kw));
-};
-
-const isEmailChannel = (channel: unknown): boolean =>
-  (channel || '').toString().toLowerCase() === 'email';
-
-const passesBusinessRelevanceGate = (channel: unknown, subject?: string, body?: string): boolean => {
-  const channelStr = (channel || '').toString().toLowerCase();
-  if (channelStr && !isEmailChannel(channelStr)) return true;
-  return isBusinessRelevant(subject, body);
-};
 
 const subjectFallback = (subject: unknown, body: unknown): string | undefined => {
   const decodedSubject = decodeHtmlEntities(subject);
@@ -202,6 +147,11 @@ const App: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+      if (!session.provider_token) {
+        setIsLoading(false);
+        alert("Your Google session is missing required permissions. Please log out and sign in with Google again to sync your inbox.");
+        return;
+      }
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
       const invokePromise = supabase.functions.invoke('fetch-gmail', {
@@ -235,7 +185,6 @@ const App: React.FC = () => {
             }
 
             console.log('Manual sync response (background):', data);
-            // Allow post-sync cleanup to re-run for this user.
             autoCategorizedForUserRef.current = null;
             await fetchData(session.user.id);
           })
@@ -246,7 +195,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // TS safety: ensure we actually have a response payload.
       if (!('res' in raceResult)) {
         throw new Error('Manual sync failed: missing response');
       }
@@ -254,13 +202,11 @@ const App: React.FC = () => {
       const { data, error } = raceResult.res;
 
       if (error) {
-        // supabase-js FunctionsHttpError typically includes context with status/body
         console.error('Manual sync function error:', error);
         const maybeAny: any = error as any;
         if (maybeAny?.context) {
           const ctx: any = maybeAny.context;
           console.error('Manual sync function context:', ctx);
-          // If context is a fetch Response, log status + body for diagnosis.
           if (typeof ctx?.status === 'number' && typeof ctx?.clone === 'function') {
             try {
               const text = await ctx.clone().text();
@@ -280,9 +226,6 @@ const App: React.FC = () => {
       }
       console.log('Manual sync response:', data);
 
-      // After invoking, fetchData will be triggered by the realtime listener
-      // but we can also call it manually to be sure
-      // Allow post-sync cleanup to re-run for this user.
       autoCategorizedForUserRef.current = null;
       await fetchData(session.user.id);
 
@@ -311,30 +254,7 @@ const App: React.FC = () => {
       if (msgs && msgs.length > 0) {
         const normalizedMessages: Message[] = msgs.map(normalizeDbMessageRow);
 
-        // Prevent irrelevant promo/spam from ever rendering (no UI flash).
-        const irrelevantIds = normalizedMessages
-          .filter((m) => !passesBusinessRelevanceGate(m.channel, m.subject, m.body))
-          .map((m) => m.id);
-
-        const irrelevantIdSet = new Set(irrelevantIds);
-        const relevantMessages =
-          irrelevantIdSet.size === 0
-            ? normalizedMessages
-            : normalizedMessages.filter((m) => !irrelevantIdSet.has(m.id));
-
-        setMessages(relevantMessages);
-
-        // Delete filtered-out rows from DB in the background (preserve space).
-        if (irrelevantIds.length > 0) {
-          (async () => {
-            try {
-              console.log(`FetchData: purging ${irrelevantIds.length} irrelevant messages from DB...`);
-              await purgeMessagesByIds(userId, irrelevantIds, 'FetchData');
-            } catch (e) {
-              console.error('FetchData: purge threw:', e);
-            }
-          })();
-        }
+        setMessages(normalizedMessages);
       } else {
         setMessages([]);
       }
@@ -428,19 +348,7 @@ const App: React.FC = () => {
         (payload) => {
           const normalized = normalizeDbMessageRow((payload as any).new);
 
-          // If a newly inserted email isn't business-relevant, remove it immediately.
-          if (!passesBusinessRelevanceGate(normalized.channel, normalized.subject, normalized.body)) {
-            console.log('Realtime: deleting irrelevant inserted message', normalized.id);
-            supabase
-              .from('messages')
-              .delete()
-              .eq('user_id', user.id)
-              .eq('id', normalized.id)
-              .then(({ error }) => {
-                if (error) console.error('Realtime: delete irrelevant message failed:', error);
-              });
-            return;
-          }
+
 
           setMessages((prev) => {
             if (prev.some((m) => m.id === normalized.id)) return prev;

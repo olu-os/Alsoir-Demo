@@ -31,9 +31,9 @@ const getCategoryColor = (cat: MessageCategory) => {
 
 const getCostIndicator = (cost: ResponseCost) => {
     switch(cost) {
-        case ResponseCost.High: return <div className="w-2 h-2 rounded-full bg-red-500" title="High Effort" />;
-        case ResponseCost.Medium: return <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Effort" />;
-        default: return <div className="w-2 h-2 rounded-full bg-green-500" title="Low Effort" />;
+        case ResponseCost.High: return <div className="w-2 h-2 rounded-full bg-red-500" title="High Urgency" />;
+        case ResponseCost.Medium: return <div className="w-2 h-2 rounded-full bg-yellow-500" title="Medium Urgency" />;
+        default: return <div className="w-2 h-2 rounded-full bg-green-500" title="Low Urgency" />;
     }
 }
 
@@ -93,7 +93,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
 
       <div className="flex-1 overflow-y-auto">
         {isLoading && filteredMessages.length === 0 ? (
-           <div className="p-8 text-center text-slate-400 text-sm">Analyzing incoming...</div>
+           <div className="p-8 text-center text-slate-400 text-sm">Analyzing incoming messages...</div>
         ) : (
           filteredMessages.map((msg) => (
             <button
@@ -130,7 +130,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                      {msg.sentiment === Sentiment.Negative && <span className="text-[10px] text-red-500 font-medium">😠 Negative</span>}
                      {/* Cost Dot */}
                      <div className="flex items-center space-x-1" title={`Predicted Response Cost: ${msg.predictedCost}`}>
-                        <span className="text-[10px] text-slate-400">Effort:</span>
+                        <span className="text-[10px] text-slate-400">Urgency:</span>
                         {getCostIndicator(msg.predictedCost)}
                      </div>
                 </div>

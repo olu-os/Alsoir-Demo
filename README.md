@@ -18,6 +18,6 @@ Local-first demo that uses Ollama for triage + reply drafting.
 2. Start Ollama locally (default): `http://localhost:11434`
    - Optional env vars in `.env.local`:
      - `VITE_OLLAMA_BASE_URL` (default `http://localhost:11434`)
-     - `VITE_OLLAMA_CHAT_MODEL` (default `qwen2.5:7b-instruct`)
+     - `VITE_OLLAMA_CHAT_MODEL` (default `gpt-oss:120b-cloud`)
 3. Run the app:
    `npm run dev`

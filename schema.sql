@@ -1,6 +1,8 @@
 -- Messages Table
 CREATE TABLE messages (
   id TEXT PRIMARY KEY, -- Using Gmail's message ID as the primary key
+  thread_id TEXT,
+  internal_date_ms BIGINT,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   sender_name TEXT,
   sender_handle TEXT,

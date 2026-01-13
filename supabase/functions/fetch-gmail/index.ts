@@ -1,75 +1,66 @@
+// AI relevance filter: only keep if AI says it's a business/support inquiry
+async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
+  try {
+    const ollamaUrl = Deno.env.get("OLLAMA_BASE_URL") || "http://localhost:11434";
+    const model = Deno.env.get("OLLAMA_CHAT_MODEL") || "gpt-oss:120b-cloud";
+    const url = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
+    const prompt = `Is the following email a business/customer support inquiry (not marketing, spam, or transactional)?\n\nSubject: ${subject}\nBody: ${body}\n\nRespond ONLY with a valid JSON object: {\"relevant\": true/false, \"reason\": \"<short reason>\"}`;
+    const payload = {
+      model,
+      stream: false,
+      messages: [
+        { role: 'system', content: 'You are a customer support AI that filters messages.' },
+        { role: 'user', content: prompt },
+      ],
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return { relevant: true };
+    const json = await res.json();
+    const content = json?.message?.content;
+    if (!content) return { relevant: true };
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return { relevant: true }; }
+      } else {
+        return { relevant: true };
+      }
+    }
+    return { relevant: !!parsed.relevant, reason: parsed.reason };
+  } catch (e) {
+    console.warn('Ollama AI relevance filter failed:', e);
+    return { relevant: true };
+  }
+}
+// Local type for AI categorization result
+type AnalysisResult = {
+  category: string;
+  sentiment: string;
+  predicted_cost: string; // 'Low' | 'Medium' | 'High'
+  tags: string[];
+};
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const GMAIL_API_URL = "https://www.googleapis.com/gmail/v1/users/me/messages";
 
 const DEFAULT_MAX_RESULTS = 30;
-const BUSINESS_KEYWORDS = [
-  "order",
-  "purchase",
-  "invoice",
-  "receipt",
-  "billing",
-  "charge",
-  "payment",
-  "tracking",
-  "shipment",
-  "shipping",
-  "delivery",
-  "delivered",
-  "eta",
-  "return",
-  "refund",
-  "exchange",
-  "replacement",
-  "cancel",
-  "cancellation",
-  "address",
-  "support",
-  "help",
-  "issue",
-  "problem",
-  "broken",
-  "damaged",
-  "missing",
-  "late",
-  "delay",
-  "complaint",
-  "warranty",
-  "subscription",
-];
 
 // Gmail search syntax: https://support.google.com/mail/answer/7190
-// Keyword-based so it works without AI.
+// No keyword filter; rely on AI for all filtering.
 const DEFAULT_GMAIL_QUERY =
-  `in:inbox -from:me -in:spam -in:trash -category:social -category:forums -category:promotions (` +
-  BUSINESS_KEYWORDS.join(" OR ") +
-  `)`;
+  `in:inbox -from:me -in:spam -in:trash -category:social -category:forums -category:promotions`;
 
-const hasExcludedLabels = (labelIds: unknown): boolean => {
-  const labels = Array.isArray(labelIds) ? labelIds : [];
-  const set = new Set(labels.filter((x) => typeof x === "string"));
-  return (
-    set.has("SPAM") ||
-    set.has("TRASH") ||
-    set.has("CATEGORY_PROMOTIONS") ||
-    set.has("CATEGORY_SOCIAL") ||
-    set.has("CATEGORY_FORUMS")
-  );
-};
 
-const normalizeForKeywordMatch = (input: string): string =>
-  (input || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[“”‘’]/g, "'")
-    .trim();
 
-const isBusinessRelevant = (subject: string, snippet: string): boolean => {
-  const text = normalizeForKeywordMatch(`${subject}\n${snippet}`);
-  if (!text) return false;
-  return BUSINESS_KEYWORDS.some((kw) => text.includes(kw));
-};
+
 
 // CORS headers to allow browser calls to this Edge Function
 const corsHeaders: Record<string, string> = {
@@ -141,68 +132,64 @@ type MessageRow = {
   tags?: string[];
 };
 
-interface AnalysisResult {
-  category: "Urgent" | "Important" | "General" | "Promotional" | "Spam";
-  sentiment: "Positive" | "Neutral" | "Negative";
-  predicted_cost: "High" | "Medium" | "Low";
-  tags: string[];
-}
 
-async function analyzeEmailWithOllama(
-  emailBody: string,
-  ollamaBaseUrl: string,
-  ollamaModel: string,
-): Promise<AnalysisResult> {
-  const prompt = `Analyze the following email and return a JSON object with 'category', 'sentiment', 'predicted_cost', and 'tags'.
+const ALLOWED_CATEGORIES = [
+  'Shipping',
+  'Returns',
+  'Product',
+  'Custom',
+  'Complaint',
+  'General',
+  'Other',
+];
 
-Email:
-"""
-${emailBody}
-"""
-
-JSON Response:`;
-
+async function categorizeWithOllama(subject: string, body: string): Promise<AnalysisResult | null> {
   try {
-    const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ollamaModel,
-        prompt: prompt,
-        format: "json",
-        stream: false,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Ollama API Error:", response.status, errorBody);
-      throw new Error(`Ollama API request failed: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    const analysis = JSON.parse(result.response);
-
-    // Basic validation
-    if (
-      !analysis.category || !analysis.sentiment || !analysis.predicted_cost ||
-      !Array.isArray(analysis.tags)
-    ) {
-      throw new Error("Invalid analysis format from Ollama");
-    }
-
-    return analysis;
-  } catch (error) {
-    console.error("Failed to analyze email with Ollama:", error);
-    // Return a default analysis on failure
-    return {
-      category: "General",
-      sentiment: "Neutral",
-      predicted_cost: "Low",
-      tags: ["analysis-failed"],
+    const ollamaUrl = Deno.env.get("OLLAMA_BASE_URL") || "http://localhost:11434";
+    const model = Deno.env.get("OLLAMA_CHAT_MODEL") || "gpt-oss:120b-cloud";
+    const url = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
+    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.\n\nSubject: ${subject}\nBody: ${body}\n\nFor the field predicted_cost, think: What happens if I don't respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn't display dissatisfaction, it will be low predicted cost\n\nRespond ONLY with a valid JSON object: {\"category\": \"<category>\", \"predicted_cost\": \"Low|Medium|High\", \"reason\": \"<short reason>\"}`;
+    const payload = {
+      model,
+      stream: false,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
+        { role: 'user', content: prompt },
+      ],
     };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const content = json?.message?.content;
+    if (!content) return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return null; }
+      } else {
+        return null;
+      }
+    }
+    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
+    let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
+    if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
+    return {
+      category,
+      sentiment: 'Neutral',
+      predicted_cost,
+      tags: [category],
+    };
+  } catch (e) {
+    console.warn('Ollama AI categorization failed:', e);
+    return null;
   }
 }
 
@@ -217,7 +204,9 @@ async function mapWithLimit<T, R>(
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (cursor < items.length) {
       const index = cursor++;
-      results[index] = await fn(items[index], index);
+      if (index < items.length) { // Re-check to prevent race conditions
+        results[index] = await fn(items[index], index);
+      }
     }
   });
 
@@ -248,9 +237,6 @@ serve(async (req) => {
     const SERVICE_ROLE_KEY =
       Deno.env.get("FUNCTION_SERVICE_ROLE_KEY") ??
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const OLLAMA_BASE_URL = Deno.env.get("OLLAMA_BASE_URL") ?? "http://host.docker.internal:11434";
-    const OLLAMA_CHAT_MODEL = Deno.env.get("OLLAMA_CHAT_MODEL") ?? "llama3";
-
 
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
       return jsonResponse(
@@ -313,7 +299,7 @@ serve(async (req) => {
         ? Math.floor(maxResults)
         : DEFAULT_MAX_RESULTS;
     const safeMaxResults = Math.max(1, Math.min(50, safeMaxResultsRaw));
-    const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : DEFAULT_GMAIL_QUERY;
+    const q = 'in:inbox category:primary';
 
     const response = await fetch(
       `${GMAIL_API_URL}?q=${encodeURIComponent(q)}&maxResults=${safeMaxResults}`,
@@ -367,17 +353,9 @@ serve(async (req) => {
       const subjectHeader = getHeaderValue(headers, "Subject");
       const dateHeader = getHeaderValue(headers, "Date") || new Date().toISOString();
 
-      // Hard-stop: don't ingest spam/trash/promotions even if they slip through the query.
-      if (hasExcludedLabels(email?.labelIds)) {
-        irrelevantIds.push(email.id);
-        return null;
-      }
 
-      // Final server-side gate: if it doesn't look like a business/support email, skip it.
-      if (!isBusinessRelevant(subjectHeader, email.snippet || "")) {
-        irrelevantIds.push(email.id);
-        return null;
-      }
+
+
 
       const labelIds = Array.isArray(email?.labelIds) ? (email.labelIds as any[]) : [];
       const internalDateMs = Number.parseInt(String(email?.internalDate ?? ""), 10);
@@ -445,13 +423,15 @@ serve(async (req) => {
       for (const m of msgs) {
         const labelIds = Array.isArray(m?.labelIds) ? m.labelIds : [];
         if (!labelIds.includes('SENT')) continue;
-        const ms = Number.parseInt(String(m?.internalDate ?? ""), 10);
-        if (Number.isFinite(ms) && ms > maxSent) maxSent = ms;
+        const sentTimestamp = Number(m.internalDate);
+        if (Number.isFinite(sentTimestamp) && sentTimestamp > maxSent) maxSent = sentTimestamp;
       }
       if (maxSent >= 0) threadLatestSentMs.set(threadId, maxSent);
     });
 
-    const newEmailsWithReplyState = newEmails.map((e) => {
+    const enrichedEmails = [];
+    for (const e of newEmails) {
+      // Compute replied status
       const sentMs = e.thread_id ? threadLatestSentMs.get(e.thread_id) : undefined;
       const inboundMs = e.internal_date_ms;
       const isReplied =
@@ -461,24 +441,29 @@ serve(async (req) => {
         Number.isFinite(inboundMs) &&
         sentMs > inboundMs;
 
-      return { ...e, is_replied: isReplied };
-    });
+      // AI relevance filter (after business keyword check)
+      const aiRelevance = await aiIsRelevant(e.subject, e.body);
+      if (!aiRelevance.relevant) {
+        irrelevantIds.push(e.id);
+        continue;
+      }
 
-    const enrichedEmails = await mapWithLimit(
-      newEmailsWithReplyState,
-      5,
-      async (email) => {
-        const analysis = await analyzeEmailWithOllama(
-          email.body,
-          OLLAMA_BASE_URL,
-          OLLAMA_CHAT_MODEL,
-        );
-        return {
-          ...email,
-          ...analysis,
+      let analysis = await categorizeWithOllama(e.subject, e.body);
+      if (!analysis) {
+        // fallback to keyword logic (old method)
+        analysis = {
+          category: 'General',
+          sentiment: 'Neutral',
+          predicted_cost: 'Low',
+          tags: [],
         };
-      },
-    );
+      }
+      enrichedEmails.push({
+        ...e,
+        is_replied: isReplied,
+        ...analysis,
+      });
+    }
 
     if (enrichedEmails.length > 0) {
       // Allow updates on conflict so reply/read state can be corrected on later syncs.
