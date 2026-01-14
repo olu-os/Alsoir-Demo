@@ -64,12 +64,25 @@ const App: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<BusinessPolicy[]>(INITIAL_POLICIES);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSyncedToast, setShowSyncedToast] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const isMountedRef = useRef(true);
   const categorizingIdsRef = useRef<Set<string>>(new Set());
   const autoCategorizedForUserRef = useRef<string | null>(null);
   const realtimeChannelRef = useRef<any>(null);
 
+    // Poll for new messages every 5 seconds when user is logged in
+    useEffect(() => {
+      if (!user?.id) return;
+      setIsLoading(true);
+      const interval = setInterval(() => {
+        fetchData(user.id, true);
+      }, 5000);
+      return () => {
+        clearInterval(interval);
+        setIsLoading(false);
+      };
+    }, [user?.id]);
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -237,8 +250,8 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchData = async (userId: string) => {
-    setIsLoading(true);
+  const fetchData = async (userId: string, isPolling = false) => {
+    if (!isPolling) setIsLoading(true);
     try {
       // Fetch Messages
       const { data: msgs, error: msgsError } = await supabase
@@ -253,7 +266,6 @@ const App: React.FC = () => {
 
       if (msgs && msgs.length > 0) {
         const normalizedMessages: Message[] = msgs.map(normalizeDbMessageRow);
-
         setMessages(normalizedMessages);
       } else {
         setMessages([]);
@@ -281,7 +293,11 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('fetchData failed:', err);
     } finally {
-      setIsLoading(false);
+      if (!isPolling) setIsLoading(false);
+      if (!isPolling) {
+        setShowSyncedToast(true);
+        setTimeout(() => setShowSyncedToast(false), 2500);
+      }
     }
   };
 
@@ -497,6 +513,7 @@ const App: React.FC = () => {
             <div className={`
                 ${selectedMessageId ? 'hidden lg:block' : 'w-full'} 
                 lg:w-96 border-r border-slate-200 h-full
+                relative
             `}>
               <MessageList 
                 messages={messages} 
@@ -504,6 +521,7 @@ const App: React.FC = () => {
                 onSelect={handleSelectMessage}
                 isLoading={isLoading}
                 onManualSync={handleManualSync}
+                showSyncedToast={showSyncedToast}
               />
             </div>
 

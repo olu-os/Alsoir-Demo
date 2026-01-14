@@ -332,9 +332,23 @@ serve(async (req) => {
       return jsonResponse({ message: "No new messages found." }, 200);
     }
 
+    // Fetch existing Gmail IDs from DB to avoid reprocessing
+    const { data: existingRows, error: existingError } = await supabaseAdmin
+      .from("messages")
+      .select("id")
+      .eq("user_id", userId);
+    if (existingError) {
+      console.error("Failed to fetch existing message IDs:", existingError);
+    }
+    const existingIds = new Set((existingRows ?? []).map((row: any) => row.id));
+
     const irrelevantIds: string[] = [];
 
-    const newEmails = (await mapWithLimit(messages, 5, async (message) => {
+    const newEmails = (await mapWithLimit(messages, 2, async (message) => {
+      if (existingIds.has(message.id)) {
+        // Skip messages already in DB
+        return null;
+      }
       const msgResponse = await fetch(`${GMAIL_API_URL}/${message.id}`, {
         headers: { Authorization: `Bearer ${session.provider_token}` },
       });
@@ -352,10 +366,6 @@ serve(async (req) => {
       const fromHeader = getHeaderValue(headers, "From");
       const subjectHeader = getHeaderValue(headers, "Subject");
       const dateHeader = getHeaderValue(headers, "Date") || new Date().toISOString();
-
-
-
-
 
       const labelIds = Array.isArray(email?.labelIds) ? (email.labelIds as any[]) : [];
       const internalDateMs = Number.parseInt(String(email?.internalDate ?? ""), 10);
@@ -429,8 +439,12 @@ serve(async (req) => {
       if (maxSent >= 0) threadLatestSentMs.set(threadId, maxSent);
     });
 
-    const enrichedEmails = [];
-    for (const e of newEmails) {
+
+    // Batch enrichment and upsert logic
+    const enrichedEmailsBatch: MessageRow[] = [];
+    let totalEnriched = 0;
+    let batchIds: string[] = [];
+    for (const [i, e] of newEmails.entries()) {
       // Compute replied status
       const sentMs = e.thread_id ? threadLatestSentMs.get(e.thread_id) : undefined;
       const inboundMs = e.internal_date_ms;
@@ -458,29 +472,44 @@ serve(async (req) => {
           tags: [],
         };
       }
-      enrichedEmails.push({
+      const enriched = {
         ...e,
         is_replied: isReplied,
         ...analysis,
-      });
-    }
+      };
+      enrichedEmailsBatch.push(enriched);
+      batchIds.push(enriched.id);
 
-    if (enrichedEmails.length > 0) {
-      // Allow updates on conflict so reply/read state can be corrected on later syncs.
+      // If batch size is 2, upsert to Supabase
+      if (enrichedEmailsBatch.length === 2) {
+        const { error } = await supabaseAdmin.from("messages").upsert(
+          enrichedEmailsBatch,
+          {
+            onConflict: "id",
+          },
+        );
+        if (error) throw error;
+        totalEnriched += enrichedEmailsBatch.length;
+        enrichedEmailsBatch.length = 0;
+      }
+    }
+    // Upsert any remaining emails in the final batch
+    if (enrichedEmailsBatch.length > 0) {
       const { error } = await supabaseAdmin.from("messages").upsert(
-        enrichedEmails,
+        enrichedEmailsBatch,
         {
           onConflict: "id",
         },
       );
       if (error) throw error;
+      totalEnriched += enrichedEmailsBatch.length;
     }
 
-    const ids = enrichedEmails.map((m) => m.id).slice(0, 5);
+    const ids = batchIds.slice(0, 2);
     const skippedCount = irrelevantIds.length;
     return jsonResponse(
       {
-        message: `Synced ${enrichedEmails.length} emails. Skipped ${skippedCount}. Purged ${deletedIrrelevantCount}.`,
+        message: `Synced ${totalEnriched} emails (in batches of 2). Skipped ${skippedCount}. Purged ${deletedIrrelevantCount}.`,
         ids,
         skippedCount,
         purgedCount: deletedIrrelevantCount,

@@ -32,10 +32,27 @@ async function tryOllamaEmbed(base: string, texts: string[]): Promise<number[][]
 
   for (const ep of endpoints) {
     const url = `${base}${ep}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'nomic-embed-text', input: texts })
+    const headers = { 'Content-Type': 'application/json' };
+    const body = JSON.stringify({ model: 'nomic-embed-text', input: texts });
+    // Log request details
+    console.log('[Ollama Embed] Request:', { url, headers, body });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body
+      });
+    } catch (err) {
+      console.error('[Ollama Embed] Fetch error:', err);
+      continue;
+    }
+    // Log response status and headers
+    console.log('[Ollama Embed] Response:', {
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      headers: Object.fromEntries(res.headers.entries())
     });
 
     if (res.status === 404) {
@@ -43,12 +60,26 @@ async function tryOllamaEmbed(base: string, texts: string[]): Promise<number[][]
     }
 
     if (!res.ok) {
+      // Log response body for errors
+      let errorText = '';
+      try { errorText = await res.text(); } catch {}
+      console.error('[Ollama Embed] Error response body:', errorText);
       // If auth/proxy/etc blocks, don't keep retrying.
       cachedEmbedEndpoint = 'none';
       return null;
     }
 
-    const json: any = await res.json();
+    let json: any;
+    try {
+      json = await res.json();
+    } catch (err) {
+      console.error('[Ollama Embed] Failed to parse JSON:', err);
+      cachedEmbedEndpoint = 'none';
+      return null;
+    }
+
+    // Log parsed JSON
+    console.log('[Ollama Embed] Parsed JSON:', json);
 
     // Common shapes:
     // - { embeddings: number[][] }
