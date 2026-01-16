@@ -64,7 +64,7 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
             `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
             `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
             `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
-            `Only include IDs for messages asking about the EXACT SAME issue and can receive the SAME reply.\n` +
+            `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
             `If none match, return {"similarIds": []}.`
         }
       ]
@@ -92,16 +92,6 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
     return [];
   }
 };
-
-const normalizeForExactMatch = (input: string): string => {
-  const decoded = decodeHtmlEntities(input || '');
-  return decoded
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[“”‘’]/g, "'")
-    .trim();
-};
-
 
 const ALLOWED_CATEGORIES = [
   'Shipping',
@@ -161,91 +151,10 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
   }
 }
 
-const heuristicAnalyze = (text: string): AnalysisResult => {
-  const raw = decodeHtmlEntities(text || '');
-  const t = raw.toLowerCase();
-
-  // Returns
-  if (/(return|refund|exchange|rma|send\s+back|wrong\s+item|cancel\s+my\s+order)/i.test(t)) {
-    return {
-      category: MessageCategory.Returns,
-      sentiment: /(angry|upset|unacceptable|terrible|worst|mad|furious|fraud|scam)/i.test(t)
-        ? Sentiment.Negative
-        : Sentiment.Neutral,
-      predictedCost: /(chargeback|dispute|fraud|scam)/i.test(t) ? ResponseCost.High : ResponseCost.Medium,
-      tags: ['Return', 'Refund'].filter(Boolean),
-    };
-  }
-
-  // Shipping
-  if (/(where\s+is\s+my\s+order|tracking|shipment|shipping|deliver|delivery|arrive|eta|package|lost|late|delay|carrier|usps|ups|fedex)/i.test(t)) {
-    return {
-      category: MessageCategory.Shipping,
-      sentiment: /(angry|upset|unacceptable|terrible|worst|mad|furious)/i.test(t)
-        ? Sentiment.Negative
-        : Sentiment.Neutral,
-      predictedCost: /(lost|stolen|missing|never\s+arrived)/i.test(t) ? ResponseCost.Medium : ResponseCost.Low,
-      tags: ['Tracking', 'Delivery'].filter(Boolean),
-    };
-  }
-
-  // Custom requests
-  if (/(custom|personaliz|engrave|size\s+change|modify|different\s+color|rush\s+order|special\s+request)/i.test(t)) {
-    return {
-      category: MessageCategory.Custom,
-      sentiment: Sentiment.Neutral,
-      predictedCost: ResponseCost.Medium,
-      tags: ['Custom'].filter(Boolean),
-    };
-  }
-
-  // Complaints
-  if (/(broken|damaged|defect|doesn\'?t\s+work|not\s+working|terrible|worst|unhappy|angry|upset|disappointed|complain)/i.test(t)) {
-    return {
-      category: MessageCategory.Complaint,
-      sentiment: Sentiment.Negative,
-      predictedCost: ResponseCost.High,
-      tags: ['Complaint'].filter(Boolean),
-    };
-  }
-
-  // Product questions
-  if (/(material|dimensions?|size\s+chart|how\s+big|does\s+it\s+fit|ingredients?|compatible|warranty|care\s+instructions|how\s+to\s+use)/i.test(t)) {
-    return {
-      category: MessageCategory.Product,
-      sentiment: Sentiment.Neutral,
-      predictedCost: ResponseCost.Low,
-      tags: ['Product'].filter(Boolean),
-    };
-  }
-
-  return {
-    category: MessageCategory.General,
-    sentiment: Sentiment.Neutral,
-    predictedCost: ResponseCost.Low,
-    tags: [],
-  };
-};
-
-const isDefaultAnalysis = (a: AnalysisResult): boolean => {
-  return (
-    a.category === MessageCategory.General &&
-    a.sentiment === Sentiment.Neutral &&
-    a.predictedCost === ResponseCost.Low &&
-    (a.tags?.length ?? 0) === 0
-  );
-};
-
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
   // Try AI categorization first
   const aiResult = await categorizeWithOllama(text);
   if (aiResult) return aiResult;
-
-  // Fallback to heuristic if AI fails
-  const heuristic = heuristicAnalyze(text);
-  if (!isDefaultAnalysis(heuristic)) {
-    return heuristic;
-  }
 
   // Fallback to General
   return {

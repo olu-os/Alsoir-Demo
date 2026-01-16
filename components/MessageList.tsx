@@ -143,8 +143,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
-                     {/* Sentiment Dot */}
-                     {msg.sentiment === Sentiment.Negative && <span className="text-[10px] text-red-500 font-medium">😠 Negative</span>}
                      {/* Cost Dot */}
                      <div className="flex items-center space-x-1" title={`Predicted Response Cost: ${msg.predictedCost}`}>
                         <span className="text-[10px] text-slate-400">Urgency:</span>
