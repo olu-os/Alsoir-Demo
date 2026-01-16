@@ -5,18 +5,15 @@ import { startEtsyOAuth } from '../services/etsyService';
 const SignIn: React.FC = () => {
     const handleGoogleLogin = async () => {
         try {
-            const scope = 'https://www.googleapis.com/auth/gmail.readonly openid email profile';
+            const scopes = 'openid email profile https://www.googleapis.com/auth/gmail.readonly';
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    // `scopes` is the supported supabase-js option.
-                    // We also include `scope` in query params for compatibility with some setups.
-                    scopes: scope,
+                    scopes,
                     redirectTo: window.location.origin,
                     queryParams: {
                         access_type: 'offline',
-                        prompt: 'consent',
-                        scope,
+                        prompt: 'consent'
                     }
                 }
             });

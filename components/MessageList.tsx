@@ -9,6 +9,7 @@ interface MessageListProps {
   isLoading: boolean;
   onManualSync: () => void;
   showSyncedToast: boolean;
+  drafts: { [id: string]: string };
 }
 
 const getChannelIcon = (channel: Channel) => {
@@ -38,7 +39,7 @@ const getCostIndicator = (cost: ResponseCost) => {
     }
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, showSyncedToast }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, showSyncedToast, drafts }) => {
   const [filter, setFilter] = React.useState('');
 
   const filteredMessages = messages.filter(m => 
@@ -120,9 +121,11 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                     {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
                 </div>
                 <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(msg.timestamp).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' })}
                 </span>
+                
               </div>
+              
               
               <h4 className="text-xs font-medium text-slate-500 mb-1 truncate">{msg.subject || 'No Subject'}</h4>
               <p className="text-sm text-slate-600 line-clamp-2 mb-2">
@@ -130,9 +133,15 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
               </p>
 
               <div className="flex items-center justify-between">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category)}`}>
-                    {msg.category}
-                </span>
+                <div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category)}`}>
+                      {msg.category}
+                  </span>
+                  {/* Show Drafting label if a draft exists for this message */}
+                  {drafts[msg.id] && (
+                    <div className="text-xs text-indigo-600 font-medium mt-3">Drafting...</div>
+                  )}
+                </div>
                 <div className="flex items-center space-x-2">
                      {/* Sentiment Dot */}
                      {msg.sentiment === Sentiment.Negative && <span className="text-[10px] text-red-500 font-medium">😠 Negative</span>}
@@ -142,6 +151,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                         {getCostIndicator(msg.predictedCost)}
                      </div>
                 </div>
+                
               </div>
             </button>
           ))

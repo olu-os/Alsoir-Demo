@@ -54,8 +54,9 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
       messages: [
         {
           role: 'system',
+          temperature: 0,
           content:
-            'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON.'
+            'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. \"reason\": \"<short reason>\"'
         },
         {
           role: 'user',
@@ -322,13 +323,12 @@ export const generateDraftReply = async (
   );
 };
 
+
 export const findSimilarMessages = async (
   target: Message,
   candidates: Message[]
 ): Promise<string[]> => {
-  // Compare against all other messages.
-  // We *prefer* same-category matches (for quality/speed) but we do not restrict,
-  // because categorization can be wrong/unfinished and it hides valid duplicates.
+  // Remove the target from candidates
   const withoutTarget = candidates.filter((m) => m.id !== target.id);
   if (withoutTarget.length === 0) return [];
 
@@ -342,62 +342,9 @@ export const findSimilarMessages = async (
     potentialMatches = [...sameCategory, ...otherCategory];
   }
 
-  // Hard cap to keep embeddings + Ollama prompts fast.
+  // Hard cap to keep prompts fast.
   potentialMatches = potentialMatches.slice(0, 50);
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `FindSimilar: pool=${candidates.length}, comparing=${potentialMatches.length}, preferCategory=${shouldPreferCategory ? String(target.category) : 'none'}`,
-  );
-
-  // Deterministic exact-duplicate match (covers the "literally duplicate" case)
-  const targetNorm = normalizeForExactMatch(target.body);
-  if (targetNorm) {
-    const exactIds = potentialMatches
-      .filter((m) => normalizeForExactMatch(m.body) === targetNorm)
-      .map((m) => m.id);
-    if (exactIds.length > 0) return exactIds;
-  }
-
-  try {
-    // Build list: target + candidates
-    const texts = [target.body, ...potentialMatches.map((m) => m.body)];
-    const embeddings = await getEmbeddings(texts);
-    if (!embeddings || embeddings.length < 2) return [];
-
-    const targetVec = embeddings[0];
-    const candidateVecs = embeddings.slice(1);
-
-    // compute similarity for all candidates
-    const sims: { id: string; sim: number }[] = [];
-    for (let i = 0; i < candidateVecs.length; i++) {
-      const sim = cosineSimilarity(targetVec, candidateVecs[i]);
-      sims.push({ id: potentialMatches[i].id, sim });
-    }
-
-    // log for debugging in the demo
-    try {
-      // eslint-disable-next-line no-console
-      console.groupCollapsed('Similarity scores for', target.id || 'target');
-      sims.forEach(s => console.log(s.id, s.sim.toFixed(3)));
-      console.groupEnd();
-    } catch {}
-
-    // primary threshold (demo-friendly)
-    const threshold = 0.6;
-    const passing = sims.filter(s => s.sim >= threshold).map(s => s.id);
-    if (passing.length > 0) return passing;
-
-    // fallback: return top 3 closest matches (if any have non-zero similarity)
-    const sorted = sims.sort((a, b) => b.sim - a.sim);
-    const top = sorted.slice(0, 3).filter(s => s.sim > 0.15).map(s => s.id);
-    if (top.length > 0) return top;
-
-    // If embeddings are unavailable/too weak (e.g., TF-IDF fallback), use local Ollama chat.
-    return await findSimilarWithOllama(target, potentialMatches);
-  } catch (error) {
-    console.error('Similarity via embeddings failed', error);
-    // Last resort fallback
-    return await findSimilarWithOllama(target, potentialMatches);
-  }
+  // Use AI similarity (Ollama) as the primary method
+  return await findSimilarWithOllama(target, potentialMatches);
 };

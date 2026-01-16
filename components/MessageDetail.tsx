@@ -6,15 +6,16 @@ import { decodeHtmlEntities } from '../services/text';
 import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X } from 'lucide-react';
 
 interface MessageDetailProps {
-  message: Message | null;
-  allMessages: Message[];
-  policies: BusinessPolicy[];
-  onReplySent: (ids: string[], reply: string) => void;
+    message: Message | null;
+    allMessages: Message[];
+    policies: BusinessPolicy[];
+    onReplySent: (ids: string[], reply: string) => void;
+    drafts: { [id: string]: string };
+    setDrafts: React.Dispatch<React.SetStateAction<{ [id: string]: string }>>;
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent }) => {
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts }) => {
     const [replyText, setReplyText] = useState('');
-    const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFindingSimilar, setIsFindingSimilar] = useState(false);
   const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
@@ -129,10 +130,9 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
     const [draftsGeneratedFor, setDraftsGeneratedFor] = useState<string[]>([]);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!message) return;
         onReplySent([message.id], replyText);
-        // Add reply to this message's sentRepliesByMessage
         const updatedReplies = { ...sentRepliesByMessage };
         updatedReplies[message.id] = [...(updatedReplies[message.id] || []), replyText];
         setSentRepliesByMessage(updatedReplies);
@@ -373,7 +373,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                             }
                                         }}
                                         placeholder="Type your reply here..."
-                                        className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm leading-relaxed"
+                                        className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
                                 />
                 <div className="absolute bottom-3 left-3 flex items-center space-x-2">
                     <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">

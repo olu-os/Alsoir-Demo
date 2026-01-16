@@ -66,6 +66,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  // Drafts state is now managed at the App level so both MessageDetail and MessageList can access it
+  const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
   const isMountedRef = useRef(true);
   const categorizingIdsRef = useRef<Set<string>>(new Set());
   const autoCategorizedForUserRef = useRef<string | null>(null);
@@ -105,27 +107,43 @@ const App: React.FC = () => {
         const { data: { session } } = await supabase.auth.getSession();
         let activeSession = session;
 
-        // If session is expired (or about to), refresh it so DB queries succeed after reload.
         const expiresAtMs = activeSession?.expires_at ? activeSession.expires_at * 1000 : null;
-        if (activeSession && expiresAtMs && expiresAtMs <= Date.now() + 10_000) {
-          const refreshed = await supabase.auth.refreshSession();
-          if (refreshed.data.session) {
-            activeSession = refreshed.data.session;
+        const refreshWindowMs = 60_000;
+        let refreshFailed = false;
+        if (activeSession && expiresAtMs && expiresAtMs <= Date.now() + refreshWindowMs) {
+          // Try up to twice to refresh
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const refreshed = await supabase.auth.refreshSession();
+              if (refreshed.data.session) {
+                activeSession = refreshed.data.session;
+                refreshFailed = false;
+                break;
+              } else {
+                refreshFailed = true;
+              }
+            } catch (err) {
+              refreshFailed = true;
+              console.warn('Session refresh attempt failed:', err);
+            }
           }
         }
 
         setUser(activeSession?.user ?? null);
-        if (!activeSession?.user) {
+        if (!activeSession?.user || refreshFailed) {
           setMessages([]);
+          if (refreshFailed) {
+            alert('Your session expired. Please sign in again.');
+          }
         }
       } catch (e) {
         console.error('Auth init failed:', e);
         setUser(null);
         setMessages([]);
+        alert('Authentication failed. Please sign in again.');
       }
     })();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) {
@@ -136,14 +154,11 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Always (re)load inbox whenever we have a logged-in user.
   useEffect(() => {
     if (!user?.id) return;
     fetchData(user.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Immediately after the initial inbox load.
   useEffect(() => {
     if (!user?.id) return;
     if (autoCategorizedForUserRef.current === user.id) return;
@@ -162,7 +177,8 @@ const App: React.FC = () => {
       if (!session) throw new Error("Not authenticated");
       if (!session.provider_token) {
         setIsLoading(false);
-        alert("Your Google session is missing required permissions. Please log out and sign in with Google again to sync your inbox.");
+        setUser(null);
+        setMessages([]);
         return;
       }
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -181,7 +197,6 @@ const App: React.FC = () => {
         new Promise<{ timedOut: true }>((resolve) => setTimeout(() => resolve({ timedOut: true }), timeoutMs)),
       ]);
 
-      // If the sync takes longer than 3s, stop the spinner and let it finish in the background.
       if (raceResult.timedOut) {
         if (isMountedRef.current) setIsLoading(false);
 
@@ -253,7 +268,6 @@ const App: React.FC = () => {
   const fetchData = async (userId: string, isPolling = false) => {
     if (!isPolling) setIsLoading(true);
     try {
-      // Fetch Messages
       const { data: msgs, error: msgsError } = await supabase
         .from('messages')
         .select('*')
@@ -270,8 +284,6 @@ const App: React.FC = () => {
       } else {
         setMessages([]);
       }
-
-      // Fetch Policies
       const { data: pols, error: polsError } = await supabase
         .from('policies')
         .select('*')
@@ -522,6 +534,7 @@ const App: React.FC = () => {
                 isLoading={isLoading}
                 onManualSync={handleManualSync}
                 showSyncedToast={showSyncedToast}
+                drafts={drafts}
               />
             </div>
 
@@ -543,6 +556,8 @@ const App: React.FC = () => {
                  allMessages={messages}
                  policies={policies}
                  onReplySent={handleReplySent}
+                 drafts={drafts}
+                 setDrafts={setDrafts}
                />
             </div>
           </>
