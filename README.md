@@ -1,8 +1,6 @@
 # Alsoir Demo (AI-assisted unified inbox)
 
-This contains everything you need to run your app locally.
-
-Local-first demo that uses Ollama for triage + reply drafting.
+This contains everything you need to run the demo locally.
 
 ## Run Locally
 
