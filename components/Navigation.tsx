@@ -43,14 +43,21 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
       </div>
 
       <div className="p-4 border-t border-slate-800">
-        <button className="w-full flex items-center p-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+        <button 
+          onClick={() => onChangeView('settings')}
+          className={`w-full flex items-center p-3 rounded-lg transition-colors ${
+            currentView === 'settings'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+              : 'hover:bg-slate-800 hover:text-white'
+          }`}
+        >
           <Settings className="w-6 h-6 flex-shrink-0" />
           <span className="ml-3 font-medium hidden lg:block">Settings</span>
         </button>
-         <button 
-           onClick={onLogout}
-           className="w-full flex items-center p-3 mt-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-         >
+        <button 
+          onClick={onLogout}
+          className="w-full flex items-center p-3 mt-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+        >
           <LogOut className="w-6 h-6 flex-shrink-0" />
           <span className="ml-3 font-medium hidden lg:block">Logout</span>
         </button>

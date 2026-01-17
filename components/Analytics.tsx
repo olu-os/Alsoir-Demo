@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message, MessageCategory, Sentiment } from '../types';
+import { Message, MessageCategory, ResponseCost } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 interface AnalyticsProps {
@@ -15,13 +15,13 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
     value: messages.filter(m => m.category === cat).length
   })).filter(d => d.value > 0);
 
-  // Calculate data for Sentiment
-  const sentimentData = Object.values(Sentiment).map(sent => ({
-    name: sent,
-    value: messages.filter(m => m.sentiment === sent).length
-  }));
+    // Calculate data for Urgency (predictedCost)
+    const urgencyData = Object.values(ResponseCost).map(cost => ({
+        name: cost,
+        value: messages.filter(m => m.predictedCost === cost).length
+    }));
 
-  // Mock response time data (simulated based on categories)
+    // Mock response time data (simulated based on categories)
   const responseTimeData = [
     { name: 'Shipping', time: 24 },
     { name: 'Returns', time: 18 },
@@ -31,7 +31,8 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
 
   const totalMessages = messages.length;
   const pendingMessages = messages.filter(m => !m.isReplied).length;
-  const avgSentiment = "Neutral"; // Simplified calculation
+    // Optionally, calculate the most common urgency
+    const mostCommonUrgency = urgencyData.reduce((a, b) => (a.value > b.value ? a : b), { name: '', value: 0 }).name || 'Low';
 
   return (
     <div className="flex-1 bg-slate-50 p-6 overflow-y-auto">
@@ -56,9 +57,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
                 </div>
             </div>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-slate-500 text-sm font-medium mb-2">Avg Sentiment</h3>
-                <div className="text-3xl font-bold text-slate-900">{avgSentiment}</div>
-                 <div className="text-xs text-slate-400 mt-1">Based on recent interactions</div>
+                <h3 className="text-slate-500 text-sm font-medium mb-2">Most Common Urgency</h3>
+                <div className="text-3xl font-bold text-slate-900">{mostCommonUrgency}</div>
+                <div className="text-xs text-slate-400 mt-1">Based on predicted response cost of Inaction</div>
             </div>
         </div>
 
@@ -90,12 +91,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
                 </div>
             </div>
 
-            {/* Sentiment Analysis */}
+            {/* Urgency (Predicted Cost) Analysis */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                <h3 className="text-lg font-semibold text-slate-800 mb-6">Customer Sentiment</h3>
+                <h3 className="text-lg font-semibold text-slate-800 mb-6">Urgency (Predicted Cost  of Inaction)</h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                         <BarChart data={sentimentData}>
+                         <BarChart data={urgencyData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} />
                             <YAxis axisLine={false} tickLine={false} />
@@ -106,26 +107,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
                 </div>
             </div>
         </div>
-        
-         {/* Charts Row 2 */}
-         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Average Reply Time (Hours)</h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={responseTimeData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={100} tick={{fill: '#64748b'}} />
-                        <Tooltip />
-                        <Bar dataKey="time" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={20}>
-                             {responseTimeData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.time > 24 ? '#fca5a5' : '#86efac'} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-         </div>
       </div>
     </div>
   );

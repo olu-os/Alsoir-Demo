@@ -53,14 +53,8 @@ const GMAIL_API_URL = "https://www.googleapis.com/gmail/v1/users/me/messages";
 
 const DEFAULT_MAX_RESULTS = 30;
 
-// Gmail search syntax: https://support.google.com/mail/answer/7190
-// No keyword filter; rely on AI for all filtering.
 const DEFAULT_GMAIL_QUERY =
   `in:inbox -from:me -in:spam -in:trash -category:social -category:forums -category:promotions`;
-
-
-
-
 
 // CORS headers to allow browser calls to this Edge Function
 const corsHeaders: Record<string, string> = {

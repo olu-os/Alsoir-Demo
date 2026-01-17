@@ -5,9 +5,11 @@ import MessageList from './components/MessageList';
 import MessageDetail from './components/MessageDetail';
 import Analytics from './components/Analytics';
 import PolicySettings from './components/PolicySettings';
+import SettingsPage from './components/SettingsPage';
 import SignIn from './components/SignIn';
 import { INITIAL_POLICIES } from './constants';
 import { Message, BusinessPolicy } from './types';
+import { ResponseMode, MessageCategory } from './types';
 import { analyzeMessageContent } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
@@ -68,6 +70,19 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   // Drafts state is now managed at the App level so both MessageDetail and MessageList can access it
   const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
+  // Settings state for SettingsPage
+  const [settings, setSettings] = useState({
+    responseMode: ResponseMode.Draft,
+    autoPilotCategories: [],
+    businessName: '',
+    signature: '',
+    autoSendAIResponses: false
+  });
+
+  const handleUpdateSettings = (updated: typeof settings) => {
+    setSettings(updated);
+    // Optionally persist settings to localStorage or backend here
+  };
   const isMountedRef = useRef(true);
   const categorizingIdsRef = useRef<Set<string>>(new Set());
   const autoCategorizedForUserRef = useRef<string | null>(null);
@@ -558,6 +573,10 @@ const App: React.FC = () => {
                  onReplySent={handleReplySent}
                  drafts={drafts}
                  setDrafts={setDrafts}
+                 businessName={settings.businessName}
+                 signature={settings.signature}
+                 autoSendAIResponses={settings.autoSendAIResponses}
+                 autoPilotCategories={settings.autoPilotCategories}
                />
             </div>
           </>
@@ -569,6 +588,10 @@ const App: React.FC = () => {
 
         {currentView === 'policies' && (
             <PolicySettings policies={policies} onUpdatePolicies={handleUpdatePolicies} />
+        )}
+
+        {currentView === 'settings' && (
+            <SettingsPage settings={settings} onUpdateSettings={handleUpdateSettings} />
         )}
       </main>
     </div>

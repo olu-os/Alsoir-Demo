@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Message, BusinessPolicy, ResponseCost } from '../types';
+import { Message, BusinessPolicy, ResponseCost, MessageCategory } from '../types';
 import { generateDraftReply, findSimilarMessages } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
@@ -12,9 +12,13 @@ interface MessageDetailProps {
     onReplySent: (ids: string[], reply: string) => void;
     drafts: { [id: string]: string };
     setDrafts: React.Dispatch<React.SetStateAction<{ [id: string]: string }>>;
+    businessName: string;
+    signature: string;
+    autoSendAIResponses: boolean;
+    autoPilotCategories: MessageCategory[];
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts }) => {
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, autoSendAIResponses, autoPilotCategories }) => {
     const [replyText, setReplyText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFindingSimilar, setIsFindingSimilar] = useState(false);
@@ -45,11 +49,25 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
     const handleGenerateReply = async () => {
         if (!message) return;
-        setIsGenerating(true);
-        const draft = await generateDraftReply(message.body, message.senderName, policies);
-        setReplyText(draft);
-        setDrafts(prev => ({ ...prev, [message.id]: draft }));
-        setIsGenerating(false);
+                setIsGenerating(true);
+                const draft = await generateDraftReply(message.body, message.senderName, policies, businessName, signature);
+                setReplyText(draft);
+                setDrafts(prev => ({ ...prev, [message.id]: draft }));
+                // Auto-send if enabled and category matches
+                if (
+                    autoSendAIResponses &&
+                    message &&
+                    autoPilotCategories.includes(message.category)
+                ) {
+                    onReplySent([message.id], draft);
+                    setDrafts(prev => {
+                        const newDrafts = { ...prev };
+                        delete newDrafts[message.id];
+                        return newDrafts;
+                    });
+                    setReplyText('');
+                }
+                setIsGenerating(false);
     };
 
   const handleFindSimilar = async () => {
@@ -154,7 +172,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         for (const id of allIds) {
             const msg = allMessages.find(m => m.id === id);
             if (msg) {
-                const draft = await generateDraftReply(msg.body, msg.senderName, policies);
+                const draft = await generateDraftReply(msg.body, msg.senderName, policies, businessName, signature);
                 newDrafts[id] = draft;
             }
         }
@@ -305,7 +323,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                             for (const id of allIds) {
                                 const msg = allMessages.find(m => m.id === id);
                                 if (msg) {
-                                    const draft = await generateDraftReply(msg.body, msg.senderName, policies);
+                                    const draft = await generateDraftReply(msg.body, msg.senderName, policies, businessName, signature);
                                     newDrafts[id] = draft;
                                 }
                             }
@@ -384,33 +402,16 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     {(() => {
                         const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
                         const allDraftsExist = allIds.every(id => drafts[id]);
-                        if (!allDraftsExist) {
-                            return (
-                                <button
-                                    onClick={handleGenerateDrafts}
-                                    disabled={isGeneratingDrafts}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <span>
-                                        {selectedSimilarIds.size > 0
-                                            ? `Generate Draft for ${selectedSimilarIds.size + 1} Recipients`
-                                            : 'Generate Draft'}
-                                    </span>
-                                    <Sparkles className="w-4 h-4" />
-                                </button>
-                            );
-                        } else {
-                            return (
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!replyText.trim()}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <span>Send</span>
-                                    <Send className="w-4 h-4" />
-                                </button>
-                            );
-                        }
+                        return (
+                            <button
+                                onClick={handleSend}
+                                disabled={!replyText.trim()}
+                                className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span>Send</span>
+                                <Send className="w-4 h-4" />
+                            </button>
+                        );
                     })()}
                 </div>
             </div>
@@ -438,6 +439,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
               <div>
                 <p className="text-sm font-medium">Forwarded to Tasks</p>
                 <p className="text-xs text-slate-400">Added to your daily todo list</p>
+                
+                <p className="text-xs text-slate-400 mt-0.8">(Feature coming soon)</p>
               </div>
           </div>
       )}

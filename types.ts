@@ -1,3 +1,15 @@
+export enum ResponseMode {
+  Draft = 'Draft',
+  AutoSend = 'AutoSend'
+}
+
+export interface AppSettings {
+  responseMode: ResponseMode;
+  autoPilotCategories: MessageCategory[];
+  businessName: string;
+  signature: string;
+  autoSendAIResponses: boolean;
+}
 export enum MessageCategory {
   Shipping = 'Shipping',
   Returns = 'Returns',

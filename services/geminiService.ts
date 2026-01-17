@@ -38,59 +38,71 @@ const getOllamaChatModel = async (): Promise<string> => {
 };
 
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
+  const url = `${String(OLLAMA_BASE_URL).replace(/\/$/, '')}/api/chat`;
+  const model = await getOllamaChatModel();
+
+  // Keep prompt small and fast for a demo
+  const limited = candidates.slice(0, 25).map((m) => ({
+    id: m.id,
+    body: (m.body || '').slice(0, 280),
+  }));
+
+  const payload = {
+    model,
+    stream: false,
+    messages: [
+      {
+        role: 'system',
+        temperature: 0,
+        content:
+          'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"'
+      },
+      {
+        role: 'user',
+        content:
+          `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
+          `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
+          `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
+          `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
+          `If none match, return {"similarIds": []}.`
+      }
+    ]
+  };
+
+  let res;
   try {
-    const url = `${String(OLLAMA_BASE_URL).replace(/\/$/, '')}/api/chat`;
-    const model = await getOllamaChatModel();
-
-    // Keep prompt small and fast for a demo
-    const limited = candidates.slice(0, 25).map((m) => ({
-      id: m.id,
-      body: (m.body || '').slice(0, 280),
-    }));
-
-    const payload = {
-      model,
-      stream: false,
-      messages: [
-        {
-          role: 'system',
-          temperature: 0,
-          content:
-            'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. \"reason\": \"<short reason>\"'
-        },
-        {
-          role: 'user',
-          content:
-            `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
-            `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
-            `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
-            `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
-            `If none match, return {"similarIds": []}.`
-        }
-      ]
-    };
-
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
-    if (!res.ok) return [];
-    const json: any = await res.json();
-    const text: string | undefined = json?.message?.content;
-    if (!text) return [];
-
-    // eslint-disable-next-line no-console
-    console.log('Ollama similarity model used:', model);
-
-    const parsed = JSON.parse(text);
-    const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
-    return ids;
   } catch (e) {
-    console.warn('Ollama similarity fallback failed:', e);
-    return [];
+    // Network or fetch error
+    throw new Error('Ollama fetch failed');
   }
+
+  if (!res.ok) throw new Error('Ollama response not ok');
+  const json: any = await res.json();
+  const text: string | undefined = json?.message?.content;
+  if (!text) throw new Error('Ollama response missing content');
+
+  // eslint-disable-next-line no-console
+  console.log('Ollama similarity model used:', model);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // Try to extract JSON from text if model added extra text
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch { throw new Error('Ollama response invalid JSON'); }
+    } else {
+      throw new Error('Ollama response invalid JSON');
+    }
+  }
+  const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
+  return ids;
 };
 
 const ALLOWED_CATEGORIES = [
@@ -169,6 +181,8 @@ const generateDraftWithOllama = async (
   messageText: string,
   senderName: string,
   policies: BusinessPolicy[],
+  businessName: string,
+  signature: string
 ): Promise<string | null> => {
   try {
     const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
@@ -186,7 +200,7 @@ const generateDraftWithOllama = async (
         {
           role: 'system',
           content:
-            'Say replies just like you\'re 50 cent rapping but still be endearing and respectful. Don\'t mention that you\'re 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use Lower East Siders & Co. as a name',
+            `Say replies just like you're 50 cent rapping but still be endearing and respectful. Don't mention that you're 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use ${businessName} as a name. Include this signature at the end of the reply:\n\n${signature}`,
         },
         {
           role: 'user',
@@ -218,18 +232,21 @@ const generateDraftWithOllama = async (
 export const generateDraftReply = async (
   messageText: string,
   senderName: string,
-  policies: BusinessPolicy[]
+  policies: BusinessPolicy[],
+  businessName: string,
+  signature: string
 ): Promise<string> => {
-  const draft = await generateDraftWithOllama(messageText, senderName, policies);
-  if (draft) return draft;
-
-  // Fallback: simple, professional template (deterministic)
-  return (
-    `Hi ${senderName || 'there'},\n\n` +
-    `Thanks for reaching out. I’m looking into this now and will help get it resolved. ` +
-    `Could you confirm your order number and any relevant details (e.g., tracking number or photos if applicable)?\n\n` +
-    `Thanks!`
-  );
+  let draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature);
+  if (!draft) {
+    // Fallback: simple, professional template (deterministic)
+    draft = (
+      `Hi ${senderName || 'there'},\n\n` +
+      `Thanks for reaching out to ${businessName || 'us'}. I’m looking into this now and will help get it resolved. ` +
+      `Could you confirm your order number and any relevant details (e.g., tracking number or photos if applicable)?\n\n` +
+      `Thanks!`
+    );
+  }
+  return draft;
 };
 
 
@@ -254,6 +271,21 @@ export const findSimilarMessages = async (
   // Hard cap to keep prompts fast.
   potentialMatches = potentialMatches.slice(0, 50);
 
-  // Use AI similarity (Ollama) as the primary method
-  return await findSimilarWithOllama(target, potentialMatches);
+  // Try AI similarity (Ollama) as the primary method
+  try {
+    return await findSimilarWithOllama(target, potentialMatches);
+  } catch (e) {
+    // Fallback: use cosine similarity
+    // eslint-disable-next-line no-console
+    console.warn('Falling back to cosine similarity:', e?.message || e);
+    const [targetEmbedding] = await getEmbeddings([target.body]);
+    const results = await Promise.all(
+      potentialMatches.map(async (m) => {
+        const [emb] = await getEmbeddings([m.body]);
+        return { id: m.id, sim: cosineSimilarity(targetEmbedding, emb) };
+      })
+    );
+    // Return IDs with similarity above 0.15
+    return results.filter(r => r.sim > 0.15).map(r => r.id);
+  }
 };
