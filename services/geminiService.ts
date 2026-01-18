@@ -1,6 +1,15 @@
+
 import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCost, Message } from "../types";
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
+
+import Groq from "groq-sdk";
+
+const LLM_PROVIDER = (typeof process !== 'undefined' && process.env?.LLM_PROVIDER) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.LLM_PROVIDER) || 'ollama';
+const GROQ_API_KEY = (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.GROQ_API_KEY);
+const GROQ_MODEL = (typeof process !== 'undefined' && process.env?.GROQ_MODEL) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.GROQ_MODEL) || 'llama3-8b-8192';
+
+const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
@@ -10,7 +19,6 @@ const getOllamaChatModel = async (): Promise<string> => {
   if (cachedOllamaModel) return cachedOllamaModel;
   const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
 
-  // If the env override is set, prefer it.
   if (((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined)) {
     cachedOllamaModel = OLLAMA_CHAT_MODEL;
     return cachedOllamaModel;
@@ -37,16 +45,49 @@ const getOllamaChatModel = async (): Promise<string> => {
   return cachedOllamaModel;
 };
 
+
+const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
+  if (!groqClient) throw new Error('Groq client not initialized');
+  const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
+  const prompt =
+    'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"\n' +
+    `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
+    `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
+    `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
+    `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
+    `If none match, return {"similarIds": []}.`;
+  const completion = await groqClient.chat.completions.create({
+    model: GROQ_MODEL,
+    messages: [
+      { role: 'system', content: 'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"' },
+      { role: 'user', content: prompt },
+    ],
+    max_tokens: 300,
+    temperature: 0.7,
+  });
+  const text = completion.choices[0]?.message?.content;
+  if (!text) throw new Error('Groq response missing content');
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch { throw new Error('Groq response invalid JSON'); }
+    } else {
+      throw new Error('Groq response invalid JSON');
+    }
+  }
+  const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
+  return ids;
+};
+
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
+  // ...existing code...
+  // (Unchanged from previous Ollama implementation)
   const url = `${String(OLLAMA_BASE_URL).replace(/\/$/, '')}/api/chat`;
   const model = await getOllamaChatModel();
-
-  // Keep prompt small and fast for a demo
-  const limited = candidates.slice(0, 25).map((m) => ({
-    id: m.id,
-    body: (m.body || '').slice(0, 280),
-  }));
-
+  const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
   const payload = {
     model,
     stream: false,
@@ -68,7 +109,6 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
       }
     ]
   };
-
   let res;
   try {
     res = await fetch(url, {
@@ -77,23 +117,16 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
       body: JSON.stringify(payload),
     });
   } catch (e) {
-    // Network or fetch error
     throw new Error('Ollama fetch failed');
   }
-
   if (!res.ok) throw new Error('Ollama response not ok');
   const json: any = await res.json();
   const text: string | undefined = json?.message?.content;
   if (!text) throw new Error('Ollama response missing content');
-
-  // eslint-disable-next-line no-console
-  console.log('Ollama similarity model used:', model);
-
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch {
-    // Try to extract JSON from text if model added extra text
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
       try { parsed = JSON.parse(match[0]); } catch { throw new Error('Ollama response invalid JSON'); }
@@ -250,6 +283,7 @@ export const generateDraftReply = async (
 };
 
 
+
 export const findSimilarMessages = async (
   target: Message,
   candidates: Message[]
@@ -271,8 +305,11 @@ export const findSimilarMessages = async (
   // Hard cap to keep prompts fast.
   potentialMatches = potentialMatches.slice(0, 50);
 
-  // Try AI similarity (Ollama) as the primary method
+  // Try AI similarity (Groq or Ollama) as the primary method
   try {
+    if (LLM_PROVIDER === 'groq') {
+      return await findSimilarWithGroq(target, potentialMatches);
+    }
     return await findSimilarWithOllama(target, potentialMatches);
   } catch (e) {
     // Fallback: use cosine similarity
