@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppSettings, ResponseMode, MessageCategory } from '../../../Gemini Templates/Alsoir Demo/types';
+import { AppSettings, ResponseMode, MessageCategory } from '../types';
 import { Bot, User, ShieldCheck, Zap, Info } from 'lucide-react';
 
 interface SettingsPageProps {
