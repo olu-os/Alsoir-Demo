@@ -6,11 +6,12 @@ const SignIn: React.FC = () => {
     const handleGoogleLogin = async () => {
         try {
             const scopes = 'openid email profile https://www.googleapis.com/auth/gmail.readonly';
+            const redirectTo = import.meta.env.VITE_SUPABASE_REDIRECT_URL || window.location.origin;
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     scopes,
-                    redirectTo: window.location.origin,
+                    redirectTo,
                     queryParams: {
                         access_type: 'offline',
                         prompt: 'consent'
