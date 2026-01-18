@@ -5,11 +5,13 @@ import { decodeHtmlEntities } from './text';
 
 import Groq from "groq-sdk";
 
-const LLM_PROVIDER = (typeof process !== 'undefined' && process.env?.LLM_PROVIDER) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.LLM_PROVIDER) || 'ollama';
-const GROQ_API_KEY = (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.GROQ_API_KEY);
-const GROQ_MODEL = (typeof process !== 'undefined' && process.env?.GROQ_MODEL) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.GROQ_MODEL) || 'llama3-8b-8192';
 
-const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
+const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+const LLM_PROVIDER = env.VITE_LLM_PROVIDER || 'ollama';
+const GROQ_API_KEY = env.VITE_GROQ_API_KEY;
+const GROQ_MODEL = env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b';
+
+const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true }) : null;
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
@@ -49,37 +51,51 @@ const getOllamaChatModel = async (): Promise<string> => {
 const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
   if (!groqClient) throw new Error('Groq client not initialized');
   const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
-  const prompt =
-    'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"\n' +
-    `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
-    `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
-    `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
-    `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
-    `If none match, return {"similarIds": []}.`;
-  const completion = await groqClient.chat.completions.create({
-    model: GROQ_MODEL,
-    messages: [
-      { role: 'system', content: 'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"' },
-      { role: 'user', content: prompt },
-    ],
-    max_tokens: 300,
-    temperature: 0.7,
-  });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error('Groq response missing content');
-  let parsed;
+  const prompt = [
+    'You are an expert customer support AI. Compare the target message to each candidate and decide if they are about the SAME issue.',
+    'Output ONLY valid JSON. At the end, add "ai_used": "Groq".',
+    'Return ONLY JSON in the shape {"similarIds": ["..."], "ai_used": "Groq"}.',
+    'Only include IDs for messages asking about the SAME issue and can receive the SAME reply.',
+    'If none match, return {"similarIds": [], "ai_used": "Groq"}.',
+    '',
+    `Target message:\n${(target.body || '').slice(0, 400)}`,
+    `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}`
+  ].join('\n');
+
   try {
-    parsed = JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      try { parsed = JSON.parse(match[0]); } catch { throw new Error('Groq response invalid JSON'); }
-    } else {
-      throw new Error('Groq response invalid JSON');
+    const completion = await groqClient.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: 'You are an expert customer support AI.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 1024,
+      temperature: 0.3,
+    });
+    const text = completion.choices[0]?.message?.content;
+    if (!text) throw new Error('Groq response missing content');
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { throw new Error('Groq response invalid JSON'); }
+      } else {
+        throw new Error('Groq response invalid JSON');
+      }
     }
+    if (parsed?.ai_used) {
+      // eslint-disable-next-line no-console
+      console.log('[AI] ai_used:', parsed.ai_used);
+    }
+    const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
+    return ids;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[Groq ERROR] Failed to get response from Groq:', err && (err.stack || err.message || err));
+    throw err;
   }
-  const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
-  return ids;
 };
 
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
@@ -96,16 +112,16 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
         role: 'system',
         temperature: 0,
         content:
-          'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>"'
+          'You compare customer support messages and decide if they are about the SAME issue. Output ONLY valid JSON. "reason": "<short reason>". At the end, add "ai_used": "Ollama".'
       },
       {
         role: 'user',
         content:
           `Target message:\n${(target.body || '').slice(0, 400)}\n\n` +
           `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}\n\n` +
-          `Return ONLY JSON in the shape {"similarIds": ["..."]}.\n` +
+          `Return ONLY JSON in the shape {"similarIds": ["..."], "ai_used": "Ollama"}.\n` +
           `Only include IDs for messages asking about the SAME issue and can receive the SAME reply.\n` +
-          `If none match, return {"similarIds": []}.`
+          `If none match, return {"similarIds": [], "ai_used": "Ollama"}.`
       }
     ]
   };
@@ -133,6 +149,10 @@ const findSimilarWithOllama = async (target: Message, candidates: Message[]): Pr
     } else {
       throw new Error('Ollama response invalid JSON');
     }
+  }
+  if (parsed?.ai_used) {
+    // eslint-disable-next-line no-console
+    console.log('[AI] ai_used:', parsed.ai_used);
   }
   const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
   return ids;
@@ -305,11 +325,27 @@ export const findSimilarMessages = async (
   // Hard cap to keep prompts fast.
   potentialMatches = potentialMatches.slice(0, 50);
 
+  // Debug logging for provider selection
+  // eslint-disable-next-line no-console
+  console.log('[AI DEBUG] LLM_PROVIDER:', LLM_PROVIDER);
+  // eslint-disable-next-line no-console
+  console.log('[AI DEBUG] groqClient initialized:', !!groqClient);
+
   // Try AI similarity (Groq or Ollama) as the primary method
   try {
     if (LLM_PROVIDER === 'groq') {
-      return await findSimilarWithGroq(target, potentialMatches);
+      // eslint-disable-next-line no-console
+      console.log('[AI DEBUG] Using Groq as provider');
+      try {
+        return await findSimilarWithGroq(target, potentialMatches);
+      } catch (groqError) {
+        // eslint-disable-next-line no-console
+        console.error('[Groq ERROR] Failed to get response from Groq:', groqError && (groqError.stack || groqError.message || groqError));
+        throw groqError;
+      }
     }
+    // eslint-disable-next-line no-console
+    console.log('[AI DEBUG] Using Ollama as provider');
     return await findSimilarWithOllama(target, potentialMatches);
   } catch (e) {
     // Fallback: use cosine similarity
