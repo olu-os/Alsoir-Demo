@@ -5,13 +5,12 @@ import { decodeHtmlEntities } from './text';
 
 import Groq from "groq-sdk";
 
-
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
-const LLM_PROVIDER = env.VITE_LLM_PROVIDER || 'ollama';
+const LLM_PROVIDER = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
 const GROQ_API_KEY = env.VITE_GROQ_API_KEY;
 const GROQ_MODEL = env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b';
 
-const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true }) : null;
+const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true}) : null;
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
@@ -47,7 +46,6 @@ const getOllamaChatModel = async (): Promise<string> => {
   return cachedOllamaModel;
 };
 
-
 const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
   if (!groqClient) throw new Error('Groq client not initialized');
   const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
@@ -70,7 +68,7 @@ const findSimilarWithGroq = async (target: Message, candidates: Message[]): Prom
         { role: 'user', content: prompt },
       ],
       max_tokens: 1024,
-      temperature: 0.3,
+      temperature: 0,
     });
     const text = completion.choices[0]?.message?.content;
     if (!text) throw new Error('Groq response missing content');
@@ -99,8 +97,6 @@ const findSimilarWithGroq = async (target: Message, candidates: Message[]): Prom
 };
 
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
-  // ...existing code...
-  // (Unchanged from previous Ollama implementation)
   const url = `${String(OLLAMA_BASE_URL).replace(/\/$/, '')}/api/chat`;
   const model = await getOllamaChatModel();
   const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
@@ -168,6 +164,54 @@ const ALLOWED_CATEGORIES = [
   'Other',
 ];
 
+async function categorizeWithGroq(text: string): Promise<AnalysisResult | null> {
+  if (!groqClient) return null;
+  const prompt = [
+    'You are a customer support AI that classifies messages.',
+    'Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.',
+    'For the field predicted_cost, think: What happens if I don\'t respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn\'t display dissatisfaction, it will be low predicted cost.',
+    'Respond ONLY with a valid JSON object: {"category": "<category>", "predicted_cost": "Low|Medium|High", "reason": "<short reason>"}',
+    '',
+    `Message: "${text}"`
+  ].join('\n');
+  try {
+    const completion = await groqClient.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 512,
+      temperature: 0,
+    });
+    const content = completion.choices[0]?.message?.content;
+    if (!content) return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return null; }
+      } else {
+        return null;
+      }
+    }
+    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
+    let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
+    if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
+    return {
+      category: category as MessageCategory,
+      sentiment: Sentiment.Neutral,
+      predictedCost: predicted_cost as ResponseCost,
+      tags: [category],
+    };
+  } catch (e) {
+    console.warn('Groq categorization failed:', e);
+    return null;
+  }
+}
+
 async function categorizeWithOllama(text: string): Promise<AnalysisResult | null> {
   try {
     const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
@@ -217,10 +261,14 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
 }
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
-  // Try AI categorization first
-  const aiResult = await categorizeWithOllama(text);
-  if (aiResult) return aiResult;
-
+  // Try Groq first if provider is groq
+  if (LLM_PROVIDER === 'groq') {
+    const groqResult = await categorizeWithGroq(text);
+    if (groqResult) return groqResult;
+  }
+  // Fallback to Ollama
+  const ollamaResult = await categorizeWithOllama(text);
+  if (ollamaResult) return ollamaResult;
   // Fallback to General
   return {
     category: MessageCategory.General,
@@ -229,6 +277,46 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
     tags: [],
   };
 };
+
+
+const generateDraftWithGroq = async (
+  messageText: string,
+  senderName: string,
+  policies: BusinessPolicy[],
+  businessName: string,
+  signature: string
+): Promise<string | null> => {
+  if (!groqClient) return null;
+  try {
+    const policyContext = policies
+      .map((p) => `${p.title}: ${p.content}`)
+      .join('\n\n')
+      .slice(0, 6000);
+    const prompt = [
+      `Say replies just like you're 50 cent rapping but still be endearing and respectful. Don't mention that you're 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use ${businessName} as a name. If longer than zero characters, always include this signature at the end of the reply:\n\n${signature}, else do not include the signature.`,
+      `Customer name: ${senderName}`,
+      `Message: ${decodeHtmlEntities(messageText || '').slice(0, 1500)}`,
+      `Business policies (reference as needed):\n${policyContext}`,
+      `Write the reply.`
+    ].join('\n\n');
+    const completion = await groqClient.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: `You are a customer support AI that writes replies.` },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 512,
+      temperature: 0.3,
+    });
+    const content = completion.choices[0]?.message?.content;
+    if (!content) return null;
+    return content.trim();
+  } catch (e) {
+    console.warn('Groq draft failed:', e);
+    return null;
+  }
+};
+
 
 const generateDraftWithOllama = async (
   messageText: string,
@@ -289,7 +377,13 @@ export const generateDraftReply = async (
   businessName: string,
   signature: string
 ): Promise<string> => {
-  let draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature);
+  let draft: string | null = null;
+  if (LLM_PROVIDER === 'groq') {
+    draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature);
+  }
+  if (!draft) {
+    draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature);
+  }
   if (!draft) {
     // Fallback: simple, professional template (deterministic)
     draft = (

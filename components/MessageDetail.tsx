@@ -230,7 +230,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 </div>
                 <div>
                     <div className="font-medium text-slate-900">{message.senderName}</div>
-                    <div className="text-xs text-slate-500">{new Date(message.timestamp).toLocaleString()}</div>
+                    <div className="text-xs text-slate-500">{(() => { const d = new Date(message.timestamp); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}` })()}</div>
                 </div>
              </div>
              {message.predictedCost === ResponseCost.High && (
@@ -305,7 +305,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-0.5">
                                         <span className="font-medium text-sm text-slate-900">{similar.senderName}</span>
-                                        <span className="text-xs text-slate-400">{new Date(similar.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                        <span className="text-xs text-slate-400">{(() => { const d = new Date(similar.timestamp); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${d.getFullYear()}` })()}</span>
                                     </div>
                                     <p className="text-xs text-slate-600 truncate">{similar.body}</p>
                                 </div>

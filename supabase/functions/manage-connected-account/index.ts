@@ -1,107 +1,7 @@
-/// <reference lib="deno.ns" />
 // Utility to check if Groq is the selected provider
 function isGroqProvider() {
   const provider = (Deno.env.get('VITE_LLM_PROVIDER') || Deno.env.get('LLM_PROVIDER') || '').toLowerCase();
   return provider === 'groq';
-}
-// GROQ relevance filter: only keep if AI says it's a business/support inquiry
-async function groqIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
-  try {
-    const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
-    const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
-    const url = "https://api.groq.com/openai/v1/chat/completions";
-    const prompt = `Is the following email a business/customer support inquiry (not marketing, spam, or transactional)?\n\nSubject: ${subject}\nBody: ${body}\n\nRespond ONLY with a valid JSON object: {\"relevant\": true/false, \"reason\": \"<short reason>\"}`;
-    const payload = {
-      model: groqModel,
-      messages: [
-        { role: 'system', content: 'You are a customer support AI that filters messages.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0,
-      stream: false,
-    };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(groqApiKey ? { 'Authorization': `Bearer ${groqApiKey}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) return { relevant: true };
-    const json = await res.json();
-    const content = json?.choices?.[0]?.message?.content;
-    if (!content) return { relevant: true };
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch { return { relevant: true }; }
-      } else {
-        return { relevant: true };
-      }
-    }
-    return { relevant: !!parsed.relevant, reason: parsed.reason };
-  } catch (e) {
-    console.warn('Groq AI relevance filter failed:', e);
-    return { relevant: true };
-  }
-}
-
-// GROQ categorization function
-async function categorizeWithGroq(subject: string, body: string): Promise<AnalysisResult | null> {
-  try {
-    const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
-    const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
-    const url = "https://api.groq.com/openai/v1/chat/completions";
-    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.\n\nSubject: ${subject}\nBody: ${body}\n\nFor the field predicted_cost, think: What happens if I don't respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn't display dissatisfaction, it will be low predicted cost\n\nRespond ONLY with a valid JSON object: {\"category\": \"<category>\", \"predicted_cost\": \"Low|Medium|High\", \"reason\": \"<short reason>\"}`;
-    const payload = {
-      model: groqModel,
-      messages: [
-        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0,
-      stream: false,
-    };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(groqApiKey ? { 'Authorization': `Bearer ${groqApiKey}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const content = json?.choices?.[0]?.message?.content;
-    if (!content) return null;
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch { return null; }
-      } else {
-        return null;
-      }
-    }
-    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
-    let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
-    if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
-    return {
-      category,
-      sentiment: 'Neutral',
-      predicted_cost,
-      tags: [category],
-    };
-  } catch (e) {
-    console.warn('Groq AI categorization failed:', e);
-    return null;
-  }
 }
 // AI relevance filter: only keep if AI says it's a business/support inquiry
 async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
@@ -144,6 +44,55 @@ async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: 
     return { relevant: true };
   }
 }
+
+// GROQ relevance filter: only keep if AI says it's a business/support inquiry
+async function groqIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
+  try {
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
+    const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
+    const url = "https://api.groq.com/openai/v1/chat/completions";
+    const prompt = `Is the following email a business/customer support inquiry (not marketing, spam, or transactional)?\n\nSubject: ${subject}\nBody: ${body}\n\nRespond ONLY with a valid JSON object: {\"relevant\": true/false, \"reason\": \"<short reason>\"}`;
+    const payload = {
+      model: groqModel,
+      messages: [
+        { role: 'system', content: 'You are a customer support AI that filters messages.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      stream: false,
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(groqApiKey ? { 'Authorization': `Bearer ${groqApiKey}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return { relevant: true };
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (!content) return { relevant: true };
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return { relevant: true }; }
+      } else {
+        return { relevant: true };
+      }
+    }
+
+    return { relevant: !!parsed.relevant, reason: parsed.reason };
+  } catch (e) {
+    console.warn('Groq AI relevance filter failed:', e);
+    return { relevant: true };
+  }
+}
 // Local type for AI categorization result
 type AnalysisResult = {
   category: string;
@@ -158,8 +107,14 @@ const GMAIL_API_URL = "https://www.googleapis.com/gmail/v1/users/me/messages";
 
 const DEFAULT_MAX_RESULTS = 30;
 
+// Gmail search syntax: https://support.google.com/mail/answer/7190
+// No keyword filter; rely on AI for all filtering.
 const DEFAULT_GMAIL_QUERY =
   `in:inbox -from:me -in:spam -in:trash -category:social -category:forums -category:promotions`;
+
+
+
+
 
 // CORS headers to allow browser calls to this Edge Function
 const corsHeaders: Record<string, string> = {
@@ -288,6 +243,60 @@ async function categorizeWithOllama(subject: string, body: string): Promise<Anal
     };
   } catch (e) {
     console.warn('Ollama AI categorization failed:', e);
+    return null;
+  }
+}
+
+// GROQ categorization function
+async function categorizeWithGroq(subject: string, body: string): Promise<AnalysisResult | null> {
+  try {
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
+    const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
+    const url = "https://api.groq.com/openai/v1/chat/completions";
+    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.\n\nSubject: ${subject}\nBody: ${body}\n\nFor the field predicted_cost, think: What happens if I don't respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn't display dissatisfaction, it will be low predicted cost\n\nRespond ONLY with a valid JSON object: {\"category\": \"<category>\", \"predicted_cost\": \"Low|Medium|High\", \"reason\": \"<short reason>\"}`;
+    const payload = {
+      model: groqModel,
+      messages: [
+        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      stream: false,
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(groqApiKey ? { 'Authorization': `Bearer ${groqApiKey}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (!content) return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { return null; }
+      } else {
+        return null;
+      }
+    }
+    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
+    let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
+    if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
+    return {
+      category,
+      sentiment: 'Neutral',
+      predicted_cost,
+      tags: [category],
+    };
+  } catch (e) {
+    console.warn('Groq AI categorization failed:', e);
     return null;
   }
 }
@@ -503,8 +512,9 @@ serve(async (req) => {
         .in("id", irrelevantIds);
       if (delErr) {
         console.warn("Failed to purge irrelevant messages from DB:", delErr);
+      } else {
+        deletedIrrelevantCount = Array.isArray(delData ?? undefined) ? (delData ?? []).length : 0;
       }
-      deletedIrrelevantCount = Array.isArray(delData ?? undefined) ? (delData ?? []).length : 0;
     }
 
     // Compute replied status per message: mark replied only if there exists a SENT
