@@ -3,14 +3,10 @@ import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCos
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
 
-import Groq from "groq-sdk";
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
 const LLM_PROVIDER = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
-const GROQ_API_KEY = env.VITE_GROQ_API_KEY;
 const GROQ_MODEL = env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b';
-
-const groqClient = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true}) : null;
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
@@ -46,54 +42,18 @@ const getOllamaChatModel = async (): Promise<string> => {
   return cachedOllamaModel;
 };
 
+// Call Supabase Edge Function for Groq-powered similarity
+const SUPABASE_FUNCTIONS_URL = env.VITE_SUPABASE_FUNCTIONS_URL || '';
 const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
-  if (!groqClient) throw new Error('Groq client not initialized');
-  const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
-  const prompt = [
-    'You are an expert customer support AI. Compare the target message to each candidate and decide if they are about the SAME issue.',
-    'Output ONLY valid JSON. At the end, add "ai_used": "Groq".',
-    'Return ONLY JSON in the shape {"similarIds": ["..."], "ai_used": "Groq"}.',
-    'Only include IDs for messages asking about the SAME issue and can receive the SAME reply.',
-    'If none match, return {"similarIds": [], "ai_used": "Groq"}.',
-    '',
-    `Target message:\n${(target.body || '').slice(0, 400)}`,
-    `Candidates (JSON array of {id, body}):\n${JSON.stringify(limited)}`
-  ].join('\n');
-
-  try {
-    const completion = await groqClient.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: 'You are an expert customer support AI.' },
-        { role: 'user', content: prompt },
-      ],
-      max_tokens: 1024,
-      temperature: 0,
-    });
-    const text = completion.choices[0]?.message?.content;
-    if (!text) throw new Error('Groq response missing content');
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch { throw new Error('Groq response invalid JSON'); }
-      } else {
-        throw new Error('Groq response invalid JSON');
-      }
-    }
-    if (parsed?.ai_used) {
-      // eslint-disable-next-line no-console
-      console.log('[AI] ai_used:', parsed.ai_used);
-    }
-    const ids = Array.isArray(parsed?.similarIds) ? parsed.similarIds.filter((x: any) => typeof x === 'string') : [];
-    return ids;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[Groq ERROR] Failed to get response from Groq:', err && (err.stack || err.message || err));
-    throw err;
-  }
+  const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/find-similar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target, candidates }),
+  });
+  if (!response.ok) throw new Error('Groq backend API error');
+  const data = await response.json();
+  if (!Array.isArray(data.similarIds)) throw new Error('Groq backend API invalid response');
+  return data.similarIds;
 };
 
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
@@ -164,52 +124,22 @@ const ALLOWED_CATEGORIES = [
   'Other',
 ];
 
+// Call Supabase Edge Function for Groq-powered categorization
 async function categorizeWithGroq(text: string): Promise<AnalysisResult | null> {
-  if (!groqClient) return null;
-  const prompt = [
-    'You are a customer support AI that classifies messages.',
-    'Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.',
-    'For the field predicted_cost, think: What happens if I don\'t respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn\'t display dissatisfaction, it will be low predicted cost.',
-    'Respond ONLY with a valid JSON object: {"category": "<category>", "predicted_cost": "Low|Medium|High", "reason": "<short reason>"}',
-    '',
-    `Message: "${text}"`
-  ].join('\n');
-  try {
-    const completion = await groqClient.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: 'You are a customer support AI that classifies messages.' },
-        { role: 'user', content: prompt },
-      ],
-      max_tokens: 512,
-      temperature: 0,
-    });
-    const content = completion.choices[0]?.message?.content;
-    if (!content) return null;
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch { return null; }
-      } else {
-        return null;
-      }
-    }
-    const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
-    let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
-    if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
-    return {
-      category: category as MessageCategory,
-      sentiment: Sentiment.Neutral,
-      predictedCost: predicted_cost as ResponseCost,
-      tags: [category],
-    };
-  } catch (e) {
-    console.warn('Groq categorization failed:', e);
-    return null;
-  }
+  const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/categorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (!data || typeof data.category !== 'string') return null;
+  return {
+    category: data.category as MessageCategory,
+    sentiment: Sentiment.Neutral,
+    predictedCost: data.predictedCost as ResponseCost || ResponseCost.Low,
+    tags: [data.category],
+  };
 }
 
 async function categorizeWithOllama(text: string): Promise<AnalysisResult | null> {
@@ -279,6 +209,7 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
 };
 
 
+// Call Supabase Edge Function for Groq-powered draft generation
 const generateDraftWithGroq = async (
   messageText: string,
   senderName: string,
@@ -286,35 +217,15 @@ const generateDraftWithGroq = async (
   businessName: string,
   signature: string
 ): Promise<string | null> => {
-  if (!groqClient) return null;
-  try {
-    const policyContext = policies
-      .map((p) => `${p.title}: ${p.content}`)
-      .join('\n\n')
-      .slice(0, 6000);
-    const prompt = [
-      `Say replies just like you're 50 cent rapping but still be endearing and respectful. Don't mention that you're 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use ${businessName} as a name. If longer than zero characters, always include this signature at the end of the reply:\n\n${signature}, else do not include the signature.`,
-      `Customer name: ${senderName}`,
-      `Message: ${decodeHtmlEntities(messageText || '').slice(0, 1500)}`,
-      `Business policies (reference as needed):\n${policyContext}`,
-      `Write the reply.`
-    ].join('\n\n');
-    const completion = await groqClient.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: `You are a customer support AI that writes replies.` },
-        { role: 'user', content: prompt },
-      ],
-      max_tokens: 512,
-      temperature: 0.3,
-    });
-    const content = completion.choices[0]?.message?.content;
-    if (!content) return null;
-    return content.trim();
-  } catch (e) {
-    console.warn('Groq draft failed:', e);
-    return null;
-  }
+  const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/generate-draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageText, senderName, policies, businessName, signature }),
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (!data || typeof data.draft !== 'string') return null;
+  return data.draft;
 };
 
 
@@ -422,8 +333,6 @@ export const findSimilarMessages = async (
   // Debug logging for provider selection
   // eslint-disable-next-line no-console
   console.log('[AI DEBUG] LLM_PROVIDER:', LLM_PROVIDER);
-  // eslint-disable-next-line no-console
-  console.log('[AI DEBUG] groqClient initialized:', !!groqClient);
 
   // Try AI similarity (Groq or Ollama) as the primary method
   try {
