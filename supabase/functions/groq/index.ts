@@ -41,7 +41,7 @@ serve(async (req) => {
   try {
     if (pathname.endsWith("/find-similar")) {
       const { target, candidates } = await req.json();
-      const limited = (candidates || []).slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
+      const limited = (candidates || []).slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 200) }));
       const prompt = [
         'You are an expert customer support AI. Compare the target message to each candidate and decide if they are about the SAME issue.',
         'Output ONLY valid JSON. At the end, add "ai_used": "Groq".',

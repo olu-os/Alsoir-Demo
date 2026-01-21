@@ -59,7 +59,7 @@ const findSimilarWithGroq = async (target: Message, candidates: Message[]): Prom
 const findSimilarWithOllama = async (target: Message, candidates: Message[]): Promise<string[]> => {
   const url = `${String(OLLAMA_BASE_URL).replace(/\/$/, '')}/api/chat`;
   const model = await getOllamaChatModel();
-  const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 280) }));
+  const limited = candidates.slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 200) }));
   const payload = {
     model,
     stream: false,
@@ -252,7 +252,7 @@ const generateDraftWithOllama = async (
         {
           role: 'system',
           content:
-            `Say replies just like you're 50 cent rapping but still be endearing and respectful. Don't mention that you're 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use ${businessName} as a name. Include this signature at the end of the reply:\n\n${signature}`,
+            `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". Output ONLY the reply text, no extra fields, no 'thinking', no JSON.`,
         },
         {
           role: 'user',

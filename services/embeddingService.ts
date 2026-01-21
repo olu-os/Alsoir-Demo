@@ -2,19 +2,42 @@
 // Exports `getEmbeddings(texts: string[])` which returns an array of float arrays.
 
 export async function getEmbeddings(texts: string[]): Promise<number[][]> {
-  // Try Ollama embeddings endpoint first
-  try {
-    const baseUrl = (import.meta as any).env?.VITE_OLLAMA_BASE_URL || 'http://localhost:11434';
-    const base = String(baseUrl).replace(/\/$/, '');
-
-    // Some Ollama builds expose `/api/embed` (newer) instead of `/api/embeddings`.
-    // We try both once and cache which works to avoid repeated console spam.
-    const embeddings = await tryOllamaEmbed(base, texts);
-    if (embeddings) return embeddings;
-  } catch (e) {
-    console.warn('Ollama embeddings unavailable, falling back to TF-IDF:', e);
+  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+  const provider = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
+  if (provider === 'ollama') {
+    try {
+      const baseUrl = env.VITE_OLLAMA_BASE_URL || 'http://localhost:11434';
+      const base = String(baseUrl).replace(/\/$/, '');
+      const embeddings = await tryOllamaEmbed(base, texts);
+      if (embeddings) return embeddings;
+    } catch (e) {
+      console.warn('Ollama embeddings unavailable, falling back to TF-IDF:', e);
+    }
+    return computeTfIdfEmbeddings(texts);
   }
-
+  // Non-Ollama: use Supabase Edge Function for embeddings first
+  const SUPABASE_FUNCTIONS_URL = env.VITE_SUPABASE_FUNCTIONS_URL || '';
+  try {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data.embeddings)) {
+        return data.embeddings.map((row: any) => Array.isArray(row) ? row.map(Number) : []);
+      }
+      if (Array.isArray(data.data)) {
+        return data.data.map((d: any) => Array.isArray(d.embedding) ? d.embedding.map(Number) : []);
+      }
+      if (Array.isArray(data.embedding)) {
+        return [data.embedding.map(Number)];
+      }
+    }
+  } catch (e) {
+    console.warn('Supabase embedding function unavailable, falling back to TF-IDF:', e);
+  }
   // Fallback: simple TF-IDF bag-of-words embeddings (deterministic, no deps)
   return computeTfIdfEmbeddings(texts);
 }

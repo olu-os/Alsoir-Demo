@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.90.1",
+    "@supabase/supabase-js": "^2.91.0",
     "@vercel/node": "^5.5.24",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
