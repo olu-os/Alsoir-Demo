@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Message, BusinessPolicy, ResponseCost, MessageCategory } from '../types';
+import { Message, BusinessPolicy, ResponseCost } from '../types';
 import { generateDraftReply, findSimilarMessages } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
@@ -14,12 +14,12 @@ interface MessageDetailProps {
     setDrafts: React.Dispatch<React.SetStateAction<{ [id: string]: string }>>;
     businessName: string;
     signature: string;
-    autoSendAIResponses: boolean;
-    autoPilotCategories: MessageCategory[];
+    bulkReplyMode?: 'autoSend' | 'draft';
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, autoSendAIResponses, autoPilotCategories }) => {
-    const [replyText, setReplyText] = useState('');
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, bulkReplyMode }) => {
+    // Store the raw draft with {NAME}
+    const [replyTextRaw, setReplyTextRaw] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFindingSimilar, setIsFindingSimilar] = useState(false);
   const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
@@ -31,9 +31,9 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     // Only reset similarMessages and selectedSimilarIds when switching messages
     useEffect(() => {
         if (message?.id) {
-            setReplyText(drafts[message.id] || '');
+            setReplyTextRaw(drafts[message.id] || '');
         } else {
-            setReplyText('');
+            setReplyTextRaw('');
         }
         setIsGenerating(false);
         setSimilarMessages([]);
@@ -43,31 +43,19 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     // Update replyText when drafts change, but do not reset similarMessages
     useEffect(() => {
         if (message?.id) {
-            setReplyText(drafts[message.id] || '');
+            setReplyTextRaw(drafts[message.id] || '');
         }
     }, [drafts, message?.id]);
 
     const handleGenerateReply = async () => {
         if (!message) return;
-                setIsGenerating(true);
-                const draft = await generateDraftReply(message.body, message.senderName, policies, businessName, signature);
-                setReplyText(draft);
-                setDrafts(prev => ({ ...prev, [message.id]: draft }));
-                // Auto-send if enabled and category matches
-                if (
-                    autoSendAIResponses &&
-                    message &&
-                    autoPilotCategories.includes(message.category)
-                ) {
-                    onReplySent([message.id], draft);
-                    setDrafts(prev => {
-                        const newDrafts = { ...prev };
-                        delete newDrafts[message.id];
-                        return newDrafts;
-                    });
-                    setReplyText('');
-                }
-                setIsGenerating(false);
+        setIsGenerating(true);
+        let draft = await generateDraftReply(message.body, message.senderName, policies, businessName, signature);
+        // Store the draft with {NAME} in state and drafts
+        setReplyTextRaw(draft);
+        setDrafts(prev => ({ ...prev, [message.id]: draft }));
+        // ...existing code...
+        setIsGenerating(false);
     };
 
   const handleFindSimilar = async () => {
@@ -150,16 +138,17 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
     const handleSend = async () => {
         if (!message) return;
-        onReplySent([message.id], replyText);
+        const personalized = replyTextRaw.replaceAll('{NAME}', message.senderName || '');
+        onReplySent([message.id], personalized);
         const updatedReplies = { ...sentRepliesByMessage };
-        updatedReplies[message.id] = [...(updatedReplies[message.id] || []), replyText];
+        updatedReplies[message.id] = [...(updatedReplies[message.id] || []), personalized];
         setSentRepliesByMessage(updatedReplies);
         setDrafts(prev => {
             const newDrafts = { ...prev };
             delete newDrafts[message.id];
             return newDrafts;
         });
-        setReplyText('');
+        setReplyTextRaw('');
         setSimilarMessages([]);
         setDraftsGeneratedFor([]);
     };
@@ -177,7 +166,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             }
         }
         setDrafts(newDrafts);
-        setReplyText('');
+        setReplyTextRaw('');
         setSimilarMessages([]);
         setIsGeneratingDrafts(false);
         setDraftsGeneratedFor(allIds);
@@ -284,7 +273,9 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         </span>
                     </div>
                     <p className="text-sm text-indigo-700 mb-3">
-                        The AI detected similar issues. Select messages to send the same response (names will be auto-adjusted).
+                        {bulkReplyMode === 'draft'
+                          ? 'The AI detected similar issues. Select messages to draft the same response (names will be auto-adjusted).'
+                          : 'The AI detected similar issues. Select messages to send the same response (names will be auto-adjusted).'}
                     </p>
                     <div className="space-y-2">
                         {similarMessages.map(similar => (
@@ -313,27 +304,16 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         ))}
                     </div>
                 </div>
-                {/* Generate Drafts Button */}
+                {/* Cancel Bulk Reply Button */}
                 <div className="flex justify-end mt-4">
                     <button
-                        onClick={async () => {
-                            if (!message) return;
-                            const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
-                            const newDrafts = { ...drafts };
-                            for (const id of allIds) {
-                                const msg = allMessages.find(m => m.id === id);
-                                if (msg) {
-                                    const draft = await generateDraftReply(msg.body, msg.senderName, policies, businessName, signature);
-                                    newDrafts[id] = draft;
-                                }
-                            }
-                            setDrafts(newDrafts);
-                            setReplyText('');
+                        onClick={() => {
                             setSimilarMessages([]);
+                            setSelectedSimilarIds(new Set());
                         }}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm font-medium"
+                        className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors shadow-sm text-sm font-medium"
                     >
-                        Generate Drafts for Selected
+                        Cancel
                     </button>
                 </div>
             </div>
@@ -377,21 +357,28 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
             <div className="relative">
                                 <textarea
-                                        value={replyText}
-                                        onChange={(e) => {
-                                            setReplyText(e.target.value);
-                                            if (message?.id) {
-                                                setDrafts(prev => ({ ...prev, [message.id]: e.target.value }));
-                                            }
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSend();
-                                            }
-                                        }}
-                                        placeholder="Type your reply here..."
-                                        className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
+                                    value={replyTextRaw.replaceAll('{NAME}', message?.senderName || '')}
+                                    onChange={(e) => {
+                                        // When user edits, update raw draft with {NAME}
+                                        let val = e.target.value;
+                                        if (message?.senderName) {
+                                            // Replace senderName with {NAME}
+                                            const regex = new RegExp(message.senderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                                            val = val.replace(regex, '{NAME}');
+                                        }
+                                        setReplyTextRaw(val);
+                                        if (message?.id) {
+                                            setDrafts(prev => ({ ...prev, [message.id]: val }));
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSend();
+                                        }
+                                    }}
+                                    placeholder="Type your reply here..."
+                                    className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
                                 />
                 <div className="absolute bottom-3 left-3 flex items-center space-x-2">
                     <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
@@ -399,20 +386,66 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     </button>
                 </div>
                 <div className="absolute bottom-3 right-3">
-                    {(() => {
-                        const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
-                        const allDraftsExist = allIds.every(id => drafts[id]);
-                        return (
-                            <button
-                                onClick={handleSend}
-                                disabled={!replyText.trim()}
-                                className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <span>Send</span>
-                                <Send className="w-4 h-4" />
-                            </button>
-                        );
-                    })()}
+                    {bulkReplyMode === 'draft' && selectedSimilarIds.size > 0 ? (
+                        <button
+                            onClick={async () => {
+                                if (!message) return;
+                                // Copy the raw draft for the current message into all selected recipients
+                                const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+                                const newDrafts = { ...drafts };
+                                for (const id of allIds) {
+                                    newDrafts[id] = replyTextRaw;
+                                }
+                                setDrafts(newDrafts);
+                                setReplyTextRaw('');
+                                setSimilarMessages([]);
+                                setDraftsGeneratedFor(allIds);
+                            }}
+                            disabled={!replyTextRaw.replaceAll('{NAME}', message?.senderName || '').trim()}
+                            className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <span>
+                                {`Draft for ${selectedSimilarIds.size + 1} Recipients`}
+                            </span>
+                            <Sparkles className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={async () => {
+                                if (!message) return;
+                                const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
+                                // Find all involved messages
+                                const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter(Boolean);
+                                // Always substitute {NAME} with the correct senderName for each recipient
+                                for (const msg of allMsgs) {
+                                    const personalized = replyTextRaw.replaceAll('{NAME}', msg.senderName || '');
+                                    await onReplySent([msg.id], personalized);
+                                    setSentRepliesByMessage(prev => ({
+                                        ...prev,
+                                        [msg.id]: [...(prev[msg.id] || []), personalized]
+                                    }));
+                                }
+                                setDrafts(prev => {
+                                    const newDrafts = { ...prev };
+                                    allIds.forEach(id => { delete newDrafts[id]; });
+                                    return newDrafts;
+                                });
+                                setReplyTextRaw('');
+                                setSimilarMessages([]);
+                                setDraftsGeneratedFor([]);
+                            }}
+                            disabled={!replyTextRaw.replaceAll('{NAME}', message?.senderName || '').trim()}
+                            className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <span>
+                                {selectedSimilarIds.size > 0 
+                                    ? `Send to ${selectedSimilarIds.size + 1} Recipients` 
+                                    : 'Send'
+                                }
+                            </span>
+                            <Send className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
             

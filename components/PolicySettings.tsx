@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BusinessPolicy } from '../types';
-import { Save, Plus, Trash2 } from 'lucide-react';
+import { Save, Plus, Trash2, Undo2, Redo2 } from 'lucide-react';
 
 interface PolicySettingsProps {
   policies: BusinessPolicy[];
@@ -10,21 +10,36 @@ interface PolicySettingsProps {
 const PolicySettings: React.FC<PolicySettingsProps> = ({ policies, onUpdatePolicies }) => {
   const [localPolicies, setLocalPolicies] = useState<BusinessPolicy[]>(policies);
   const [hasChanges, setHasChanges] = useState(false);
+  const [undoStack, setUndoStack] = useState<BusinessPolicy[][]>([]);
+  const [redoStack, setRedoStack] = useState<BusinessPolicy[][]>([]);
+
+  useEffect(() => {
+    if (hasChanges) return;
+    setLocalPolicies(policies);
+    setHasChanges(false);
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [policies, hasChanges]);
+
+  const applyPoliciesUpdate = (nextPolicies: BusinessPolicy[]) => {
+    setUndoStack((prev) => [...prev, localPolicies]);
+    setRedoStack([]);
+    setLocalPolicies(nextPolicies);
+    setHasChanges(true);
+  };
 
   const handleContentChange = (id: string, newContent: string) => {
     const updated = localPolicies.map(p => 
       p.id === id ? { ...p, content: newContent } : p
     );
-    setLocalPolicies(updated);
-    setHasChanges(true);
+    applyPoliciesUpdate(updated);
   };
 
   const handleTitleChange = (id: string, newTitle: string) => {
     const updated = localPolicies.map(p => 
       p.id === id ? { ...p, title: newTitle } : p
     );
-    setLocalPolicies(updated);
-    setHasChanges(true);
+    applyPoliciesUpdate(updated);
   };
 
   const handleAddPolicy = () => {
@@ -33,18 +48,34 @@ const PolicySettings: React.FC<PolicySettingsProps> = ({ policies, onUpdatePolic
         title: 'New Policy',
         content: ''
     };
-    setLocalPolicies([...localPolicies, newPolicy]);
-    setHasChanges(true);
+    applyPoliciesUpdate([...localPolicies, newPolicy]);
   };
 
   const handleDeletePolicy = (id: string) => {
-    setLocalPolicies(localPolicies.filter(p => p.id !== id));
-    setHasChanges(true);
+    applyPoliciesUpdate(localPolicies.filter(p => p.id !== id));
   }
 
   const handleSave = () => {
     onUpdatePolicies(localPolicies);
     setHasChanges(false);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, localPolicies]);
+    setLocalPolicies(previous);
+    setHasChanges(true);
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, localPolicies]);
+    setLocalPolicies(next);
+    setHasChanges(true);
   };
 
   return (
@@ -55,14 +86,32 @@ const PolicySettings: React.FC<PolicySettingsProps> = ({ policies, onUpdatePolic
                 <h1 className="text-2xl font-bold text-slate-900">Business Policies</h1>
                 <p className="text-slate-500 mt-1">These policies are used by the AI to generate accurate replies.</p>
             </div>
+          <div className="flex items-center space-x-2">
             <button
-                onClick={handleSave}
-                disabled={!hasChanges}
-                className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <Save className="w-4 h-4" />
-                <span>Save Changes</span>
+              <Undo2 className="w-4 h-4" />
+              <span className="text-sm">Undo</span>
             </button>
+            <button
+              onClick={handleRedo}
+              disabled={redoStack.length === 0}
+              className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="w-4 h-4" />
+              <span className="text-sm">Redo</span>
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges}
+              className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Changes</span>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6">

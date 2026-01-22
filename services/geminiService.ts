@@ -252,7 +252,7 @@ const generateDraftWithOllama = async (
         {
           role: 'system',
           content:
-            `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". Output ONLY the reply text, no extra fields, no 'thinking', no JSON.`,
+            `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". Output ONLY the reply text, no extra fields, no 'thinking', no JSON. When referring to the customer, use {NAME} as a variable for their name (e.g., 'Yo {NAME}, ...').`,
         },
         {
           role: 'user',

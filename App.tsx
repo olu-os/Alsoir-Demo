@@ -71,16 +71,20 @@ const App: React.FC = () => {
   // Drafts state is now managed at the App level so both MessageDetail and MessageList can access it
   const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
   // Settings state for SettingsPage
-  const [settings, setSettings] = useState({
-    responseMode: ResponseMode.Draft,
-    autoPilotCategories: [],
+  const [settings, setSettings] = useState<{
+    businessName: string;
+    signature: string;
+    autoSendAIResponses: boolean;
+    bulkReplyMode: 'draft' | 'autoSend';
+  }>({
     businessName: '',
     signature: '',
-    autoSendAIResponses: false
+    autoSendAIResponses: false,
+    bulkReplyMode: 'draft'
   });
 
   const handleUpdateSettings = (updated: typeof settings) => {
-    setSettings(updated);
+    setSettings({ ...settings, ...updated });
     // Optionally persist settings to localStorage or backend here
   };
   const isMountedRef = useRef(true);
@@ -107,6 +111,8 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Etsy OAuth callback logic commented out
+    /*
     // Check for Etsy OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -115,6 +121,7 @@ const App: React.FC = () => {
     if (code && state) {
       handleEtsyCallback(code, state);
     }
+    */
 
     // Initialize auth session (and refresh if needed)
     (async () => {
@@ -440,6 +447,8 @@ const App: React.FC = () => {
     }
   };
 
+  // handleEtsyCallback commented out
+  /*
   const handleEtsyCallback = async (code: string, state: string) => {
     const savedState = localStorage.getItem('etsy_oauth_state');
     const codeVerifier = localStorage.getItem('etsy_code_verifier');
@@ -459,6 +468,7 @@ const App: React.FC = () => {
     // For demo purposes, we alert the user
     alert('Etsy account linked successfully (simulated token exchange)');
   };
+  */
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -492,9 +502,23 @@ const App: React.FC = () => {
   };
 
   const handleUpdatePolicies = async (updatedPolicies: BusinessPolicy[]) => {
+    const previousPolicies = policies;
     setPolicies(updatedPolicies);
     
     if (!user) return;
+
+    const removedIds = previousPolicies
+      .filter((p) => !updatedPolicies.some((u) => u.id === p.id))
+      .filter((p) => p.id.length > 20)
+      .map((p) => p.id);
+
+    if (removedIds.length > 0) {
+      await supabase
+        .from('policies')
+        .delete()
+        .eq('user_id', user.id)
+        .in('id', removedIds);
+    }
 
     // This is a simplified bulk update. In production, you'd want to handle 
     // inserts, updates, and deletes specifically.
@@ -575,8 +599,7 @@ const App: React.FC = () => {
                  setDrafts={setDrafts}
                  businessName={settings.businessName}
                  signature={settings.signature}
-                 autoSendAIResponses={settings.autoSendAIResponses}
-                 autoPilotCategories={settings.autoPilotCategories}
+                 bulkReplyMode={settings.bulkReplyMode}
                />
             </div>
           </>

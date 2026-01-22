@@ -88,7 +88,7 @@ serve(async (req) => {
       const { messageText, senderName, policies, businessName, signature } = await req.json();
       const policyContext = (policies || []).map((p) => `${p.title}: ${p.content}`).join('\n\n').slice(0, 6000);
       const prompt = [
-        `Say replies just like you're 50 cent rapping but still be endearing and respectful. Don't mention that you're 50 Cent or an AI. Keep it concise and readable. Use shorter lines and prioritize rhyming. Use ${businessName} as a name. If longer than zero characters, always include this signature at the end of the reply:\n\n${signature}, else do not include the signature.`,
+        `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". If signature is undefined, end it normally. Output ONLY the reply text, no extra fields, no 'thinking', no JSON.`,
         `Customer name: ${senderName}`,
         `Message: ${messageText}`,
         `Business policies (reference as needed):\n${policyContext}`,

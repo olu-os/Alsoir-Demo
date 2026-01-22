@@ -25,14 +25,14 @@ const SignIn: React.FC = () => {
         }
     };
 
-    const handleEtsyLogin = async () => {
-        try {
-            await startEtsyOAuth();
-        } catch (error) {
-            console.error('Error starting Etsy OAuth:', error);
-            alert('Failed to start Etsy login');
-        }
-    };
+    // const handleEtsyLogin = async () => {
+    //     try {
+    //         await startEtsyOAuth();
+    //     } catch (error) {
+    //         console.error('Error starting Etsy OAuth:', error);
+    //         alert('Failed to start Etsy login');
+    //     }
+    // };
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
@@ -48,6 +48,7 @@ const SignIn: React.FC = () => {
                         Sign in with Google (Gmail)
                     </button>
                     
+                    {/*
                     <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                             <div className="w-full border-t border-gray-300"></div>
@@ -63,6 +64,7 @@ const SignIn: React.FC = () => {
                     >
                         Sign in with Etsy
                     </button>
+                    */}
                 </div>
             </div>
         </div>

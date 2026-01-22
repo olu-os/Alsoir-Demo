@@ -4,11 +4,10 @@ export enum ResponseMode {
 }
 
 export interface AppSettings {
-  responseMode: ResponseMode;
-  autoPilotCategories: MessageCategory[];
   businessName: string;
   signature: string;
   autoSendAIResponses: boolean;
+  bulkReplyMode: 'autoSend' | 'draft';
 }
 export enum MessageCategory {
   Shipping = 'Shipping',
