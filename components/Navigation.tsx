@@ -11,7 +11,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
-    { id: 'policies', label: 'Policies & AI', icon: FileText },
+    { id: 'policies', label: 'Policies', icon: FileText },
   ];
 
   return (
