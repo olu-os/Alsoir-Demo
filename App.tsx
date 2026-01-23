@@ -60,6 +60,9 @@ const purgeMessagesByIds = async (userId: string, ids: string[], context: string
   }
 };
 
+// Demo user email constant
+const DEMO_EMAIL = 'demo@alsoir.com';
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('inbox');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -68,6 +71,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  // Helper to check if current user is demo user
+  const isDemoUser = user?.email === DEMO_EMAIL;
   // Drafts state is now managed at the App level so both MessageDetail and MessageList can access it
   const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
   // Settings state for SettingsPage
@@ -176,6 +181,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Only fetch messages for demo user, and never call fetch-gmail or Gmail API in demo mode
   useEffect(() => {
     if (!user?.id) return;
     fetchData(user.id);
@@ -193,6 +199,10 @@ const App: React.FC = () => {
   }, [user?.id, messages.length]);
 
   const handleManualSync = async () => {
+    if (isDemoUser) {
+      alert('Sync is disabled in Demo Mode.');
+      return;
+    }
     setIsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -472,6 +482,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setUser(null); // Force UI update
   };
 
   // NOTE: Removed demo-only "simulate incoming messages" behavior.
@@ -549,9 +560,13 @@ const App: React.FC = () => {
 
   const selectedMessage = messages.find(m => m.id === selectedMessageId) || null;
 
+
   if (!user) {
     return <SignIn />;
   }
+
+  // Show Demo Mode banner if demo user is logged in
+  // (Banner already implemented, but ensure it's always shown for demo user)
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
@@ -574,6 +589,7 @@ const App: React.FC = () => {
                 onManualSync={handleManualSync}
                 showSyncedToast={showSyncedToast}
                 drafts={drafts}
+                demoMode={isDemoUser}
               />
             </div>
 

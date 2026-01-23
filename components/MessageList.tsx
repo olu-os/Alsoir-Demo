@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message, MessageCategory, Sentiment, ResponseCost, Channel } from '../types';
+import { Message, MessageCategory, ResponseCost, Channel } from '../types';
 import { Search, Filter, Instagram, Mail, ShoppingBag, Check } from 'lucide-react';
 import { filterMessagesBySearch, filterMessagesByFeature } from '../services/filterMessages';
 
@@ -11,6 +11,7 @@ interface MessageListProps {
   onManualSync: () => void;
   showSyncedToast: boolean;
   drafts: { [id: string]: string };
+  demoMode?: boolean;
 }
 
 const getChannelIcon = (channel: Channel) => {
@@ -40,7 +41,7 @@ const getCostIndicator = (cost: ResponseCost) => {
     }
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, showSyncedToast, drafts }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, showSyncedToast, drafts, demoMode }) => {
   const [filter, setFilter] = React.useState('');
   const [selectedCategories, setSelectedCategories] = React.useState<MessageCategory[]>([]);
   const [selectedUrgencies, setSelectedUrgencies] = React.useState<ResponseCost[]>([]);
@@ -108,7 +109,9 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
     <div className="flex flex-col h-full bg-white border-r border-slate-200 w-full md:w-80 lg:w-96">
       <div className="p-4 border-b border-slate-100">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-slate-800">Inbox</h2>
+          <h2 className="text-xl font-bold text-slate-800">
+            Inbox {demoMode && <span className="text-indigo-600">(Demo Mode)</span>}
+          </h2>
           <div className="flex items-center">
             {showSyncedToast && (
               <div className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap animate-fade-in-out mr-0">

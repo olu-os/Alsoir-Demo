@@ -399,6 +399,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 setDrafts(newDrafts);
                                 setReplyTextRaw('');
                                 setSimilarMessages([]);
+                                setSelectedSimilarIds(new Set());
                                 setDraftsGeneratedFor(allIds);
                             }}
                             disabled={!replyTextRaw.replaceAll('{NAME}', message?.senderName || '').trim()}

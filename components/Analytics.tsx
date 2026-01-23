@@ -31,8 +31,10 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
 
   const totalMessages = messages.length;
   const pendingMessages = messages.filter(m => !m.isReplied).length;
-    // Optionally, calculate the most common urgency
-    const mostCommonUrgency = urgencyData.reduce((a, b) => (a.value > b.value ? a : b), { name: '', value: 0 }).name || 'Low';
+    // Calculate the most common urgency, empty if no messages
+    const mostCommonUrgency = messages.length === 0
+      ? ''
+      : urgencyData.reduce((a, b) => (a.value > b.value ? a : b), { name: '', value: 0 }).name || 'Low';
 
   return (
     <div className="flex-1 bg-slate-50 p-6 overflow-y-auto">

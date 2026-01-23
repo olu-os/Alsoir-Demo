@@ -10,8 +10,8 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout }) => {
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
+    { id: 'policies', label: 'Policies', icon: FileText },
     { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
-    { id: 'policies', label: 'Policies & AI', icon: FileText },
   ];
 
   return (
