@@ -88,6 +88,8 @@ const App: React.FC = () => {
     bulkReplyMode: 'draft'
   });
 
+  const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: string[] }>({});
+
   const handleUpdateSettings = (updated: typeof settings) => {
     setSettings({ ...settings, ...updated });
     // Optionally persist settings to localStorage or backend here
@@ -616,6 +618,8 @@ const App: React.FC = () => {
                  businessName={settings.businessName}
                  signature={settings.signature}
                  bulkReplyMode={settings.bulkReplyMode}
+                 sentRepliesByMessage={sentRepliesByMessage}
+                 setSentRepliesByMessage={setSentRepliesByMessage}
                />
             </div>
           </>

@@ -30,11 +30,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
   ];
 
   const totalMessages = messages.length;
-  const pendingMessages = messages.filter(m => !m.isReplied).length;
-    // Calculate the most common urgency, empty if no messages
-    const mostCommonUrgency = messages.length === 0
-      ? ''
-      : urgencyData.reduce((a, b) => (a.value > b.value ? a : b), { name: '', value: 0 }).name || 'Low';
 
   return (
     <div className="flex-1 bg-slate-50 p-6 overflow-y-auto">
@@ -44,24 +39,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-slate-500 text-sm font-medium mb-2">Total Volume</h3>
+                <h3 className="text-slate-500 text-sm font-medium mb-2">Number of Messages</h3>
                 <div className="text-3xl font-bold text-slate-900">{totalMessages}</div>
                 <div className="text-xs text-green-600 mt-1 flex items-center">
                     <span className="font-bold">+12%</span>
                     <span className="text-slate-400 ml-1">vs last week</span>
                 </div>
-            </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-slate-500 text-sm font-medium mb-2">Pending Responses</h3>
-                <div className="text-3xl font-bold text-slate-900">{pendingMessages}</div>
-                <div className="text-xs text-amber-600 mt-1 flex items-center">
-                    <span className="font-bold">Needs Action</span>
-                </div>
-            </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-slate-500 text-sm font-medium mb-2">Most Common Urgency</h3>
-                <div className="text-3xl font-bold text-slate-900">{mostCommonUrgency}</div>
-                <div className="text-xs text-slate-400 mt-1">Based on predicted response cost of Inaction</div>
             </div>
         </div>
 

@@ -15,18 +15,19 @@ interface MessageDetailProps {
     businessName: string;
     signature: string;
     bulkReplyMode?: 'autoSend' | 'draft';
+    sentRepliesByMessage: { [messageId: string]: string[] };
+    setSentRepliesByMessage: React.Dispatch<React.SetStateAction<{ [messageId: string]: string[] }>>;
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, bulkReplyMode }) => {
-    // Store the raw draft with {NAME}
-    const [replyTextRaw, setReplyTextRaw] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isFindingSimilar, setIsFindingSimilar] = useState(false);
-  const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
-  const [selectedSimilarIds, setSelectedSimilarIds] = useState<Set<string>>(new Set());
-  const [showTaskToast, setShowTaskToast] = useState(false);
-  const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: string[] }>({});
-  const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, bulkReplyMode, sentRepliesByMessage, setSentRepliesByMessage }) => {
+        // Store the raw draft with {NAME}
+        const [replyTextRaw, setReplyTextRaw] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isFindingSimilar, setIsFindingSimilar] = useState(false);
+    const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
+    const [selectedSimilarIds, setSelectedSimilarIds] = useState<Set<string>>(new Set());
+    const [showTaskToast, setShowTaskToast] = useState(false);
+    const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
 
     // Only reset similarMessages and selectedSimilarIds when switching messages
     useEffect(() => {
@@ -176,7 +177,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 text-slate-400">
         <Sparkles className="w-16 h-16 mb-4 text-slate-300" />
-        <p className="text-lg">Select a message to start AI triage</p>
+        <p className="text-lg">Select a message to send a response</p>
       </div>
     );
   }
