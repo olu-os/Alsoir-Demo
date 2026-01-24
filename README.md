@@ -1,8 +1,45 @@
 # Alsoir Demo (AI-assisted unified inbox)
 
-This contains everything you need to run the demo locally.
+Live demo: https://alsoir.vercel.app
 
-## Run Locally
+## Demo Options (start here)
+
+### Option 1 — Demo Mode (no sign-in required)
+This is the fastest way to try the product. You can explore the UI, filtering, and AI drafts using pre-seeded messages.
+
+**Limitations:**
+- You cannot send your own custom emails to test categorization and similarity features.
+- Messages do not refresh or get categorized in real time.
+
+### Option 2 — Real Gmail Test (delegate access)
+If you want to test with real emails and real-time categorization, request delegate access to the test inbox.
+
+**Simplest request flow:**
+1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform) and provide the email you want to use.
+2. I will grant delegate access to alsoirtest@gmail.com within 24 hours.
+
+**Sign in steps:**
+1. Click “Sign in with Google.”
+2. Select the same email you submitted.
+3. Accept the Gmail API permission prompts.
+
+Once approved, you’ll see live inbox sync and auto-categorization.
+
+## How the key features work
+
+- **Find Similar:** Select a message and use “Find Similar” to locate other messages about the same issue, then reply in bulk.
+- **Bulk Reply Mode:** After clicking Find Similar, choose the messages you want to send the current reply to (names will be auto-adjusted). In Settings, you can choose whether messages are Bulk drafted or automatically sent when you click the send button.
+- **Generate with AI:** Drafts are generated from the selected message text + sender name, and the AI is guided by your policies, business name, and signature.
+- **Filters:** Use category and urgency filters to narrow the inbox view.
+
+
+## Tailor Generated Drafts
+
+Go to **Settings → Identity** to set your **Business Name** and **Email Signature**. The AI uses these in generated replies.
+
+If you add policies (returns, shipping, guarantees, etc.), the AI references them automatically to tailor responses to your business rules.
+
+## Devs: Run Locally
 
 **Prerequisites:**  Node.js
 

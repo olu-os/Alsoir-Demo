@@ -110,7 +110,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
       <div className="p-4 border-b border-slate-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-slate-800">
-            Inbox {demoMode && <span className="text-indigo-600">(Demo Mode)</span>}
+            Inbox {demoMode && <span className="text-indigo-600">(Demo)</span>}
           </h2>
           <div className="flex items-center">
             {showSyncedToast && (
