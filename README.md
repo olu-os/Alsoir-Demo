@@ -11,16 +11,16 @@ This is the fastest way to try the product. You can explore the UI, filtering, a
 - You cannot send your own custom emails to test categorization and similarity features.
 - Messages do not refresh or get categorized in real time.
 
-### Option 2 — Real Gmail Test (delegate access)
-If you want to test with real emails and real-time categorization, request delegate access to the test inbox.
+### Option 2 — Full Gmail Test (using test inbox)
+If you want to send your own emails to test the real-time categorization and similarity features, request delegate access to the test gmail account.
 
 **Simplest request flow:**
 1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform) and provide the email you want to use.
-2. I will grant delegate access to alsoirtest@gmail.com within 24 hours.
+2. I will grant you access to alsoirtest@gmail.com within 24 hours.
 
 **Sign in steps:**
 1. Click “Sign in with Google.”
-2. Select the same email you submitted.
+2. Sign in with the test email.
 3. Accept the Gmail API permission prompts.
 
 Once approved, you’ll see live inbox sync and auto-categorization.
