@@ -29,6 +29,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
 
+    const getFirstName = (fullName?: string) => {
+        const senderName = (fullName || '').trim();
+        if (!senderName) return '';
+        return senderName.split(/\s+/)[0] || '';
+    };
+
     // Only reset similarMessages and selectedSimilarIds when switching messages
     useEffect(() => {
         if (message?.id) {
@@ -139,7 +145,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
     const handleSend = async () => {
         if (!message) return;
-        const personalized = replyTextRaw.replaceAll('{NAME}', message.senderName || '');
+        const personalized = replyTextRaw.replaceAll('{NAME}', getFirstName(message.senderName));
         onReplySent([message.id], personalized);
         const updatedReplies = { ...sentRepliesByMessage };
         updatedReplies[message.id] = [...(updatedReplies[message.id] || []), personalized];
@@ -358,13 +364,14 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
             <div className="relative">
                                 <textarea
-                                    value={replyTextRaw.replaceAll('{NAME}', message?.senderName || '')}
+                                    value={replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName))}
                                     onChange={(e) => {
                                         // When user edits, update raw draft with {NAME}
                                         let val = e.target.value;
                                         if (message?.senderName) {
                                             // Replace senderName with {NAME}
-                                            const regex = new RegExp(message.senderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                                            const firstName = getFirstName(message.senderName);
+                                            const regex = new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
                                             val = val.replace(regex, '{NAME}');
                                         }
                                         setReplyTextRaw(val);
@@ -403,7 +410,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 setSelectedSimilarIds(new Set());
                                 setDraftsGeneratedFor(allIds);
                             }}
-                            disabled={!replyTextRaw.replaceAll('{NAME}', message?.senderName || '').trim()}
+                            disabled={!replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName)).trim()}
                             className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <span>
@@ -420,7 +427,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter(Boolean);
                                 // Always substitute {NAME} with the correct senderName for each recipient
                                 for (const msg of allMsgs) {
-                                    const personalized = replyTextRaw.replaceAll('{NAME}', msg.senderName || '');
+                                    const personalized = replyTextRaw.replaceAll('{NAME}', getFirstName(msg.senderName));
                                     await onReplySent([msg.id], personalized);
                                     setSentRepliesByMessage(prev => ({
                                         ...prev,
@@ -436,7 +443,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 setSimilarMessages([]);
                                 setDraftsGeneratedFor([]);
                             }}
-                            disabled={!replyTextRaw.replaceAll('{NAME}', message?.senderName || '').trim()}
+                            disabled={!replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName)).trim()}
                             className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <span>

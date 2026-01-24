@@ -509,9 +509,6 @@ const App: React.FC = () => {
         ids.includes(m.id) ? { ...m, isReplied: true } : m
     );
     setMessages(updatedMessages);
-
-    // NOTE: We do not persist `is_replied` here because this demo does not
-    // actually send messages via Gmail. Reply state is derived from Gmail sync.
   };
 
   const handleUpdatePolicies = async (updatedPolicies: BusinessPolicy[]) => {
@@ -533,8 +530,6 @@ const App: React.FC = () => {
         .in('id', removedIds);
     }
 
-    // This is a simplified bulk update. In production, you'd want to handle 
-    // inserts, updates, and deletes specifically.
     for (const policy of updatedPolicies) {
       if (policy.id.length > 20) { // Assume UUID or existing
          await supabase
@@ -547,7 +542,6 @@ const App: React.FC = () => {
             category: policy.category || 'General' 
           });
       } else {
-        // New policy (mock ID was numerical or short)
         await supabase
           .from('policies')
           .insert({ 

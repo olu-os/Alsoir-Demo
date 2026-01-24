@@ -9,13 +9,11 @@ interface AnalyticsProps {
 const COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'];
 
 const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
-  // Calculate data for Category Distribution
   const categoryData = Object.values(MessageCategory).map(cat => ({
     name: cat,
     value: messages.filter(m => m.category === cat).length
   })).filter(d => d.value > 0);
 
-    // Calculate data for Urgency (predictedCost)
     const urgencyData = Object.values(ResponseCost).map(cost => ({
         name: cost,
         value: messages.filter(m => m.predictedCost === cost).length
@@ -41,10 +39,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ messages }) => {
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                 <h3 className="text-slate-500 text-sm font-medium mb-2">Number of Messages</h3>
                 <div className="text-3xl font-bold text-slate-900">{totalMessages}</div>
-                <div className="text-xs text-green-600 mt-1 flex items-center">
-                    <span className="font-bold">+12%</span>
-                    <span className="text-slate-400 ml-1">vs last week</span>
-                </div>
             </div>
         </div>
 

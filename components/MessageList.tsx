@@ -96,7 +96,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
     // eslint-disable-next-line
   }, [filteredMessages, selectedIdx, onSelect]);
 
-  // Scroll selected message into view
   const scrollToMessage = (idx: number) => {
     if (!listRef.current) return;
     const btns = listRef.current.querySelectorAll('button[data-msg-idx]');

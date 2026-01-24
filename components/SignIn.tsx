@@ -34,9 +34,7 @@ const SignIn: React.FC = () => {
     //     }
     // };
 
-    // Demo login handler
     const handleDemoLogin = async () => {
-        // Demo credentials (should match a test user in your Supabase project)
         const demoEmail = 'demo@alsoir.com';
         const demoPassword = 'demopassword';
         try {
@@ -65,7 +63,7 @@ const SignIn: React.FC = () => {
                     </button>
                     <button
                         onClick={handleDemoLogin}
-                        className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 font-medium transition-colors"
+                        className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-white bg-indigo-800 hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-700 font-medium transition-colors"
                     >
                         Demo Mode
                     </button>
