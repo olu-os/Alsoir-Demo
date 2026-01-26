@@ -60,4 +60,23 @@ describe('Bulk reply personalization', () => {
     expect(personalized[1]).toBe('Hi Broke, your order is on the way!');
     expect(personalized[2]).toBe('Hi Alice, your order is on the way!');
   });
+
+  it('handles senderName with multiple spaces and special characters', () => {
+    const draft = 'Dear {NAME}, please review.';
+    expect(draft.replaceAll('{NAME}', getFirstName('  Jean-Luc  Picard  '))).toBe('Dear Jean-Luc, please review.');
+    expect(draft.replaceAll('{NAME}', getFirstName(' María-José Carreño Quiñones '))).toBe('Dear María-José, please review.');
+    expect(draft.replaceAll('{NAME}', getFirstName('李 小龙'))).toBe('Dear 李, please review.');
+    expect(draft.replaceAll('{NAME}', getFirstName(''))).toBe('Dear , please review.');
+    expect(draft.replaceAll('{NAME}', getFirstName(undefined))).toBe('Dear , please review.');
+  });
+
+  it('does not replace if {NAME} is missing in draft', () => {
+    const draft = 'Hello there!';
+    expect(draft.replaceAll('{NAME}', getFirstName('Alice'))).toBe('Hello there!');
+  });
+
+  it('replaces multiple {NAME} occurrences', () => {
+    const draft = 'Hi {NAME}, your agent {NAME} is here.';
+    expect(draft.replaceAll('{NAME}', getFirstName('Bob Smith'))).toBe('Hi Bob, your agent Bob is here.');
+  });
 });
