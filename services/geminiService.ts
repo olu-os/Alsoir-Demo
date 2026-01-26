@@ -5,7 +5,7 @@ import { decodeHtmlEntities } from './text';
 
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
-const LLM_PROVIDER = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
+const LLM_PROVIDER = process.env.LLM_PROVIDER || env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || (process.env.NODE_ENV === 'test' ? 'groq' : '');
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';

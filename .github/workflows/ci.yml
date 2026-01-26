@@ -19,4 +19,4 @@ jobs:
       - name: Set LLM_PROVIDER for tests
         run: echo "LLM_PROVIDER=groq" >> $GITHUB_ENV
       - name: Run Vitest
-        run: npm run test
+        run: LLM_PROVIDER=groq npm run test
