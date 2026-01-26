@@ -8,7 +8,7 @@ import { MessageCategory, Sentiment, ResponseCost, Channel, Message } from '../t
 describe('findSimilarMessages (integration, real AI)', () => {
   it('should find other late package messages as similar (with retries and logging)', async () => {
     // @ts-ignore
-    if (typeof setTimeout === 'function' && typeof vitest !== 'undefined') vitest.setTimeout(10000);
+    if (typeof setTimeout === 'function' && typeof vitest !== 'undefined') vitest.setTimeout(20000);
     const fakeMessages: Message[] = [
       {
         id: 'msg0',

@@ -209,7 +209,7 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
 
 
 // Call Supabase Edge Function for Groq-powered draft generation
-const generateDraftWithGroq = async (
+export const generateDraftWithGroq = async (
   messageText: string,
   senderName: string,
   policies: BusinessPolicy[],
@@ -237,7 +237,7 @@ const generateDraftWithGroq = async (
 };
 
 
-const generateDraftWithOllama = async (
+export const generateDraftWithOllama = async (
   messageText: string,
   senderName: string,
   policies: BusinessPolicy[],

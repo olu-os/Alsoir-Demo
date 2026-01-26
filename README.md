@@ -32,7 +32,7 @@ Once approved, you’ll see live inbox sync and auto-categorization.
    - In Settings, you can choose whether messages are Bulk drafted or automatically sent when you click the send button.
 - **Generate with AI:** Drafts are generated from the selected message text + sender name, and the AI is guided by your policies, business name, and signature.
 - **Filters:** Use category and urgency filters to narrow the inbox view.
-
+- **AI Personality Option:**vYou can choose the tone and style of your AI-generated replies using the AI Personality setting (found in Settings and above the Generate with AI button).
 
 ## Tailor Generated Drafts
 
@@ -58,11 +58,18 @@ If you add policies (returns, shipping, guarantees, etc.), the AI references the
 
 ## About the app
 
-Alsoir is a human-centered organized inbox for small businesses that don’t want chatbots but do want efficiency and speed.  
+Alsoir is a human-centered organized inbox for small businesses that don’t want chatbots but do want efficiency and speed.
 
-I designed it because managing customer messages across platforms is overwhelming, and most tools solve the problem with  
-chatbots, which many users find impersonal or ineffective.
+I designed it because managing customer messages across platforms is overwhelming, and most tools solve the problem with chatbots, which many users find impersonal or ineffective.
 
-It solves that problem by organizing messages by topic, highlighting urgency and letting users generate custom AI responses that can route customers to the right FAQ in one click.  
+It solves that problem by organizing messages by topic, highlighting urgency, and letting users generate custom AI responses that can route customers to the right FAQ in one click.
+
+Also, there's an AI Personality setting that lets you tailor responses to match your brand’s voice or just have fun with customer interactions.
 
 With features like the bulk-reply mode and AI Draft Generation, users can save time responding to customer messages and spend more time building their businesses.
+
+## Gmail API Reply Limitation
+
+**Note:** Currently, messages cannot be replied to directly through the Gmail API to the recipient's actual email address in this demo. This is due to the sensitive nature of email sending permissions and the detailed information required to ensure secure, responsible handling of user data.
+
+However, after the app is approved and authorized, this will be in development.

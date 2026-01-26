@@ -32,6 +32,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/ui": "^4.0.17",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "jsdom": "^27.4.0",
     "supabase": "^2.72.4",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

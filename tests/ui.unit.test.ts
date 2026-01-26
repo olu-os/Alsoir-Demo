@@ -74,7 +74,7 @@ describe('Message search filtering', () => {
 describe('Reply logic and error handling', () => {
   it('handles AI error gracefully', async () => {
     vi.spyOn(geminiService, 'generateDraftReply').mockResolvedValueOnce('');
-    const draft = await geminiService.generateDraftReply('test', 'user', [], 'Business', 'Signature');
+    const draft = await geminiService.generateDraftReply('test', 'user', [], 'Business', 'Signature', 'support');
     expect(typeof draft).toBe('string');
     expect(draft.length).toBeGreaterThanOrEqual(0);
   });
