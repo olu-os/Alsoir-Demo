@@ -1,6 +1,6 @@
 import React from 'react';
 import { Message, MessageCategory, ResponseCost, Channel } from '../types';
-import { Search, Filter, Instagram, Mail, ShoppingBag, Check } from 'lucide-react';
+import { Search, Filter, Instagram, Mail, ShoppingBag } from 'lucide-react';
 import { filterMessagesBySearch, filterMessagesByFeature } from '../services/filterMessages';
 
 interface MessageListProps {

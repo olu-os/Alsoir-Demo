@@ -1,11 +1,5 @@
 import { Message, MessageCategory, ResponseCost } from '../types';
 
-/**
- * Filters messages by search string (senderName, body, subject).
- * @param messages Array of messages to filter
- * @param search Search string
- * @returns Filtered array of messages
- */
 export function filterMessagesBySearch(messages: Message[], search: string): Message[] {
   if (!search) return messages;
   const lower = search.toLowerCase();
@@ -16,12 +10,6 @@ export function filterMessagesBySearch(messages: Message[], search: string): Mes
   );
 }
 
-/**
- * Filters messages by categories and/or urgencies (predictedCost).
- * @param messages Array of messages to filter
- * @param options Filtering options
- * @returns Filtered array of messages
- */
 export function filterMessagesByFeature(
   messages: Message[],
   options: {

@@ -9,7 +9,6 @@ import SettingsPage from './components/SettingsPage';
 import SignIn from './components/SignIn';
 import { INITIAL_POLICIES } from './constants';
 import { Message, BusinessPolicy } from './types';
-import { ResponseMode, MessageCategory } from './types';
 import { analyzeMessageContent } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
@@ -43,23 +42,6 @@ const normalizeDbMessageRow = (row: any): Message => ({
   tags: Array.isArray(row.tags) ? row.tags : [],
 });
 
-const purgeMessagesByIds = async (userId: string, ids: string[], context: string) => {
-  if (ids.length === 0) return;
-  const batchSize = 50;
-  for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    const { error } = await supabase
-      .from('messages')
-      .delete()
-      .eq('user_id', userId)
-      .in('id', batch);
-
-    if (error) {
-      console.error(`${context}: purge DB delete failed:`, error, { batchSize: batch.length });
-    }
-  }
-};
-
 // Demo user email constant
 const DEMO_EMAIL = 'demo@alsoir.com';
 
@@ -71,28 +53,31 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  // Helper to check if current user is demo user
   const isDemoUser = user?.email === DEMO_EMAIL;
-  // Drafts state is now managed at the App level so both MessageDetail and MessageList can access it
   const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
-  // Settings state for SettingsPage
+
   const [settings, setSettings] = useState<{
     businessName: string;
     signature: string;
     autoSendAIResponses: boolean;
     bulkReplyMode: 'draft' | 'autoSend';
+    aiPersonality: 'support' | 'rapper' | 'medieval';
   }>({
     businessName: '',
     signature: '',
     autoSendAIResponses: false,
-    bulkReplyMode: 'draft'
+    bulkReplyMode: 'draft',
+    aiPersonality: 'support'
   });
 
   const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: string[] }>({});
 
   const handleUpdateSettings = (updated: typeof settings) => {
     setSettings({ ...settings, ...updated });
-    // Optionally persist settings to localStorage or backend here
+  };
+
+  const handleUpdateAiPersonality = (value: 'support' | 'rapper' | 'medieval') => {
+    setSettings((prev) => ({ ...prev, aiPersonality: value }));
   };
   const isMountedRef = useRef(true);
   const categorizingIdsRef = useRef<Set<string>>(new Set());
@@ -487,8 +472,6 @@ const App: React.FC = () => {
     setUser(null); // Force UI update
   };
 
-  // NOTE: Removed demo-only "simulate incoming messages" behavior.
-
   const handleSelectMessage = async (id: string) => {
     const updatedMessages = messages.map(m => 
       m.id === id ? { ...m, isRead: true } : m
@@ -496,7 +479,6 @@ const App: React.FC = () => {
     setMessages(updatedMessages);
     setSelectedMessageId(id);
     
-    // Update in Supabase
     await supabase
       .from('messages')
       .update({ is_read: true })
@@ -531,7 +513,7 @@ const App: React.FC = () => {
     }
 
     for (const policy of updatedPolicies) {
-      if (policy.id.length > 20) { // Assume UUID or existing
+      if (policy.id.length > 20) {
          await supabase
           .from('policies')
           .upsert({ 
@@ -560,9 +542,6 @@ const App: React.FC = () => {
   if (!user) {
     return <SignIn />;
   }
-
-  // Show Demo Mode banner if demo user is logged in
-  // (Banner already implemented, but ensure it's always shown for demo user)
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
@@ -611,6 +590,8 @@ const App: React.FC = () => {
                  setDrafts={setDrafts}
                  businessName={settings.businessName}
                  signature={settings.signature}
+                 aiPersonality={settings.aiPersonality}
+                 onUpdateAiPersonality={handleUpdateAiPersonality}
                  bulkReplyMode={settings.bulkReplyMode}
                  sentRepliesByMessage={sentRepliesByMessage}
                  setSentRepliesByMessage={setSentRepliesByMessage}

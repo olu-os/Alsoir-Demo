@@ -40,6 +40,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdateSettings 
             <p className="text-xs text-slate-500 mt-2">Choose whether bulk reply sends immediately or generates drafts for all selected recipients.</p>
           </div>
 
+          {/* AI Personality */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-2">AI Personality</h2>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">Personality</label>
+              <select
+                value={settings.aiPersonality || 'support'}
+                onChange={(e) => onUpdateSettings({ ...settings, aiPersonality: e.target.value as any })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-500 focus:outline-none bg-white"
+              >
+                <option value="support">Customer Support Agent (Default)</option>
+                <option value="rapper">Rapper</option>
+                <option value="medieval">Medieval Alfred</option>
+              </select>
+              <p className="text-xs text-slate-500">Changes the tone of generated drafts.</p>
+            </div>
+          </div>
+
           {/* Business Info Section */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-4">Identity</h2>

@@ -8,6 +8,7 @@ export interface AppSettings {
   signature: string;
   autoSendAIResponses: boolean;
   bulkReplyMode: 'autoSend' | 'draft';
+  aiPersonality: 'support' | 'rapper' | 'medieval';
 }
 export enum MessageCategory {
   Shipping = 'Shipping',

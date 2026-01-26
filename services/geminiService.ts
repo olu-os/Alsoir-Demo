@@ -6,7 +6,6 @@ import { decodeHtmlEntities } from './text';
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
 const LLM_PROVIDER = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
-const GROQ_MODEL = env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b';
 
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
@@ -215,12 +214,21 @@ const generateDraftWithGroq = async (
   senderName: string,
   policies: BusinessPolicy[],
   businessName: string,
-  signature: string
+  signature: string,
+  aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string | null> => {
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/generate-draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messageText, senderName, policies, businessName, signature }),
+    body: JSON.stringify({
+      messageText,
+      senderName,
+      policies,
+      businessName,
+      signature,
+      aiPersonality,
+      aiDraftInstructions: 'Always use {NAME} as a variable for the customer’s name, never the full name. Do not use the customer’s full name in the reply.'
+    }),
   });
   if (!response.ok) return null;
   const data = await response.json();
@@ -234,7 +242,8 @@ const generateDraftWithOllama = async (
   senderName: string,
   policies: BusinessPolicy[],
   businessName: string,
-  signature: string
+  signature: string,
+  aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string | null> => {
   try {
     const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
@@ -245,6 +254,17 @@ const generateDraftWithOllama = async (
       .join('\n\n')
       .slice(0, 6000);
 
+    const personalityPrompt = (() => {
+      switch (aiPersonality) {
+        case 'rapper':
+          return `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming.`;
+        case 'medieval':
+          return `Reply as a courteous medieval attendant. Be polite and respectful, using light old‑fashioned phrasing without sounding archaic or hard to read.`;
+        default:
+          return `Reply as a helpful, professional customer support agent. Be concise, warm, and clear.`;
+      }
+    })();
+
     const payload = {
       model,
       stream: false,
@@ -252,7 +272,7 @@ const generateDraftWithOllama = async (
         {
           role: 'system',
           content:
-            `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". Output ONLY the reply text, no extra fields, no 'thinking', no JSON. When referring to the customer, use {NAME} as a variable for their name (e.g., 'Yo {NAME}, ...').`,
+            `${personalityPrompt} Sign with: "${signature}". Output ONLY the reply text, no extra fields, no 'thinking', no JSON. When referring to the customer, ALWAYS use {NAME} as a variable for their name, NEVER the full name. Do not use the customer’s full name in the reply.`,
         },
         {
           role: 'user',
@@ -286,17 +306,18 @@ export const generateDraftReply = async (
   senderName: string,
   policies: BusinessPolicy[],
   businessName: string,
-  signature: string
+  signature: string,
+  aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string> => {
   let draft: string | null = null;
   if (LLM_PROVIDER === 'groq') {
-    draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature);
+    draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature, aiPersonality);
   }
   if (!draft) {
-    draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature);
+    draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature, aiPersonality);
   }
   if (!draft) {
-    // Fallback: simple, professional template (deterministic)
+    // Fallback
     draft = (
       `Hi ${senderName || 'there'},\n\n` +
       `Thanks for reaching out to ${businessName || 'us'}. I’m looking into this now and will help get it resolved. ` +

@@ -85,10 +85,20 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/generate-draft")) {
-      const { messageText, senderName, policies, businessName, signature } = await req.json();
+      const { messageText, senderName, policies, businessName, signature, aiPersonality } = await req.json();
       const policyContext = (policies || []).map((p) => `${p.title}: ${p.content}`).join('\n\n').slice(0, 6000);
+      const personalityPrompt = (() => {
+        switch (aiPersonality) {
+          case 'rapper':
+            return `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming.`;
+          case 'medieval':
+            return `Reply as a courteous medieval attendant. Be polite and respectful, using light old-fashioned phrasing without sounding archaic or hard to read.`;
+          default:
+            return `Reply as a helpful, professional customer support agent. Be concise, warm, and clear.`;
+        }
+      })();
       const prompt = [
-        `Reply as a rap, endearing and respectful. Use shorter lines, keep it concise, prioritize rhyming. Sign with: "${signature}". If signature is undefined, end it normally. Output ONLY the reply text, no extra fields, no 'thinking', no JSON.`,
+        `${personalityPrompt} Sign with: "${signature}". If signature is undefined, end it normally. Output ONLY the reply text, no extra fields, no 'thinking', no JSON. When referring to the customer, ALWAYS use {NAME} as a variable for their name, NEVER the full name. Do not use the customer’s full name in the reply.`,
         `Customer name: ${senderName}`,
         `Message: ${messageText}`,
         `Business policies (reference as needed):\n${policyContext}`,

@@ -1,5 +1,4 @@
 // Lightweight embedding service with Ollama-first, TF-IDF fallback.
-// Exports `getEmbeddings(texts: string[])` which returns an array of float arrays.
 
 export async function getEmbeddings(texts: string[]): Promise<number[][]> {
   const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -104,10 +103,6 @@ async function tryOllamaEmbed(base: string, texts: string[]): Promise<number[][]
     // Log parsed JSON
     console.log('[Ollama Embed] Parsed JSON:', json);
 
-    // Common shapes:
-    // - { embeddings: number[][] }
-    // - { data: [{ embedding: number[] }, ...] }
-    // - { embedding: number[] } for single input
     if (Array.isArray(json?.embeddings)) {
       cachedEmbedEndpoint = ep;
       return json.embeddings.map((row: any) => Array.isArray(row) ? row.map(Number) : []);
@@ -121,7 +116,6 @@ async function tryOllamaEmbed(base: string, texts: string[]): Promise<number[][]
       return [json.embedding.map(Number)];
     }
 
-    // Unexpected shape; treat as unsupported
     cachedEmbedEndpoint = 'none';
     return null;
   }
