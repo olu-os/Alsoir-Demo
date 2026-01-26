@@ -1,6 +1,6 @@
-import { vi, beforeEach, afterEach } from 'vitest';
+import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import * as geminiService from '../services/geminiService';
-import { generateDraftWithGroq, generateDraftWithOllama } from '../services/geminiService';
+import { generateDraftReply } from '../services/geminiService';
 describe('generateDraftReply fallback logic', () => {
   const OLD_ENV = { ...process.env };
   beforeEach(() => {
@@ -16,14 +16,14 @@ describe('generateDraftReply fallback logic', () => {
   it('falls back to Ollama if Groq fails', async () => {
     vi.spyOn(geminiService, 'generateDraftWithGroq').mockResolvedValueOnce(null);
     vi.spyOn(geminiService, 'generateDraftWithOllama').mockResolvedValueOnce('Hi {NAME}, fallback from Ollama.');
-    const draft = await geminiService.generateDraftReply('msg', 'Alice', [], 'Biz', 'Sig', 'support');
+    const draft = await generateDraftReply('msg', 'Alice', [], 'Biz', 'Sig', 'support');
     expect(draft).toContain('{NAME}');
   });
 
   it('falls back to template if both AI providers fail', async () => {
     vi.spyOn(geminiService, 'generateDraftWithGroq').mockResolvedValueOnce(null);
     vi.spyOn(geminiService, 'generateDraftWithOllama').mockResolvedValueOnce('{NAME} fallback template.');
-    const draft = await geminiService.generateDraftReply('msg', 'Alice', [], 'Biz', 'Sig', 'support');
+    const draft = await generateDraftReply('msg', 'Alice', [], 'Biz', 'Sig', 'support');
     expect(draft).toContain('{NAME}');
   });
 });
@@ -57,9 +57,6 @@ describe('generateDraftReply edge cases', () => {
     expect(draft).toContain('{NAME}');
   });
 });
-import { describe, it, expect } from 'vitest';
-import { generateDraftReply } from '../services/geminiService';
-
 describe('AI draft reply {NAME} integration (real AI)', () => {
   it('should only substitute the first name for {NAME} in the draft', async () => {
     vi.spyOn(geminiService, 'generateDraftWithGroq').mockResolvedValueOnce('Hello {NAME}, how can I help?');

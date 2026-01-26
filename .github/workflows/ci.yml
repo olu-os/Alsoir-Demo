@@ -16,5 +16,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci
+      - name: Set LLM_PROVIDER for tests
+        run: echo "LLM_PROVIDER=groq" >> $GITHUB_ENV
       - name: Run Vitest
         run: npm run test
