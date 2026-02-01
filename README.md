@@ -40,22 +40,6 @@ Go to **Settings → Identity** to set your **Business Name** and **Email Signat
 
 If you add policies (returns, shipping, guarantees, etc.), the AI references them automatically to tailor responses to your business rules.
 
-## Devs: Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Start Ollama locally (default): `http://localhost:11434`
-    - Pull the required embedding model:
-       `ollama pull nomic-embed-text`
-    - Optional env vars in `.env.local`:
-       - `VITE_OLLAMA_BASE_URL` (default `http://localhost:11434`)
-       - `VITE_OLLAMA_CHAT_MODEL` (default `gpt-oss:120b-cloud`)
-3. Run the app:
-   `npm run dev`
-
 ## About the app
 
 Alsoir is a human-centered organized inbox for small businesses that don’t want chatbots but do want efficiency and speed.
@@ -73,3 +57,19 @@ With features like the bulk-reply mode and AI Draft Generation, users can save t
 **Note:** Currently, messages cannot be replied to directly through the Gmail API to the recipient's actual email address in this demo. This is due to the sensitive nature of email sending permissions and the detailed information required to ensure secure, responsible handling of user data.
 
 However, after the app is approved and authorized, this will be in development.
+
+## Devs: Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Start Ollama locally (default): `http://localhost:11434`
+    - Pull the required embedding model:
+       `ollama pull nomic-embed-text`
+    - Optional env vars in `.env.local`:
+       - `VITE_OLLAMA_BASE_URL` (default `http://localhost:11434`)
+       - `VITE_OLLAMA_CHAT_MODEL` (default `gpt-oss:120b-cloud`)
+3. Run the app:
+   `npm run dev`
