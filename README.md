@@ -12,11 +12,11 @@ This is the fastest way to try the product. You can explore the UI, filtering, a
 - Messages do not refresh or get categorized in real time.
 
 ### Option 2 — Full Gmail Test (using test inbox)
-If you want to send your own emails to test the real-time categorization and similarity features, request delegate access to the test gmail account.
+If you want to send your own emails to test the real-time categorization and similarity features, request access to the test gmail account.
 
 **Simplest request flow:**
-1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform) and provide the email you want to use.
-2. I will grant you access to alsoirtest@gmail.com within 24 hours.
+1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform).
+2. I will grant you access to alsoirtest@gmail.com after reviewing your request.
 
 **Sign in steps:**
 1. Click “Sign in with Google.”
