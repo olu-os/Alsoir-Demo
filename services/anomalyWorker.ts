@@ -11,7 +11,8 @@ import { analyzeAnomaly } from './incidentService';
  */
 
 const HIGH_LATENCY_THRESHOLD_MS = 3000;
-const ERROR_SPIKE_WINDOW = 5; // number of recent events to check
+const ERROR_SPIKE_WINDOW = 5;
+const SPIKE_TIME_WINDOW_MS = 5 * 60 * 1000;
 
 // Rolling buffer of recent events for spike detection (in-memory, per session)
 const recentEvents: AppEvent[] = [];
@@ -28,18 +29,39 @@ function checkAnomalies(event: AppEvent): string[] {
     flags.push('AI_FAILURE');
   }
 
-  // Error spike: 3+ failures of the same type in the rolling buffer
+  // Error spike: 3+ failures of the same type within the time window
+  const now = Date.now();
   const recentOfType = recentEvents
-    .slice(-ERROR_SPIKE_WINDOW)
-    .filter((e) => e.type === event.type && e.status === 'failed');
+    .filter((e) => e.type === event.type && e.status === 'failed' &&
+      e.created_at && (now - new Date(e.created_at).getTime()) < SPIKE_TIME_WINDOW_MS);
   if (recentOfType.length >= 3) {
     flags.push('ERROR_SPIKE');
+  }
+
+  // Fallback spike: 3+ fallbacks within the time window
+  const recentFallbacks = recentEvents
+    .filter((e) => e.status === 'fallback' &&
+      e.created_at && (now - new Date(e.created_at).getTime()) < SPIKE_TIME_WINDOW_MS);
+  if (recentFallbacks.length >= 3) {
+    flags.push('FALLBACK_SPIKE');
   }
 
   return flags;
 }
 
 let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+const COOLDOWN_MS = 60_000;
+const lastTriggered: Record<string, number> = {};
+
+function dedupeFlags(flags: string[]): string[] {
+  const now = Date.now();
+  return flags.filter((flag) => {
+    if (now - (lastTriggered[flag] ?? 0) < COOLDOWN_MS) return false;
+    lastTriggered[flag] = now;
+    return true;
+  });
+}
 
 export function startAnomalyWorker(userId: string): void {
   if (realtimeChannel) return; // Already running
@@ -57,15 +79,14 @@ export function startAnomalyWorker(userId: string): void {
       (payload) => {
         const event = payload.new as AppEvent;
 
-        // Maintain rolling buffer
         recentEvents.push(event);
         if (recentEvents.length > MAX_BUFFER) recentEvents.shift();
 
         const flags = checkAnomalies(event);
-        if (flags.length > 0) {
-          console.log('[anomalyWorker] Anomaly detected:', flags, event);
-          // Fire-and-forget: call Groq to analyze and create incident
-          analyzeAnomaly([...recentEvents.slice(-ERROR_SPIKE_WINDOW)], flags).catch((e) => {
+        const dedupedFlags = dedupeFlags(flags);
+        if (dedupedFlags.length > 0) {
+          console.log('[anomalyWorker] Anomaly detected:', dedupedFlags, event);
+          analyzeAnomaly([...recentEvents.slice(-ERROR_SPIKE_WINDOW)], dedupedFlags).catch((e) => {
             console.warn('[anomalyWorker] analyzeAnomaly failed:', e);
           });
         }
@@ -80,4 +101,5 @@ export function stopAnomalyWorker(): void {
     realtimeChannel = null;
   }
   recentEvents.length = 0;
+  Object.keys(lastTriggered).forEach((k) => delete lastTriggered[k]);
 }

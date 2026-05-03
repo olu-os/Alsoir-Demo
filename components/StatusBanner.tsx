@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { AlertTriangle } from 'lucide-react';
 
 /**
  * StatusBanner — Layer 1
@@ -8,9 +7,10 @@ import { AlertTriangle } from 'lucide-react';
 
 interface StatusBannerProps {
   userId: string;
+  currentView: string;
 }
 
-const StatusBanner: React.FC<StatusBannerProps> = ({ userId }) => {
+const StatusBanner: React.FC<StatusBannerProps> = ({ userId, currentView }) => {
   const [hasActiveIncident, setHasActiveIncident] = useState(false);
 
   useEffect(() => {
@@ -40,14 +40,26 @@ const StatusBanner: React.FC<StatusBannerProps> = ({ userId }) => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [userId]);
+  }, [userId, currentView]);
 
-  if (!hasActiveIncident) return null;
+  if (!hasActiveIncident || currentView !== 'observability') return null;
 
   return (
-    <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs font-medium">
-      <AlertTriangle className="w-3.5 h-3.5" />
-      <span>We're experiencing issues — our team is investigating</span>
+    <div className="relative w-full h-0.5 overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(90deg, transparent 0%, #f59e0b 30%, #ef4444 50%, #f59e0b 70%, transparent 100%)',
+          backgroundSize: '200% 100%',
+          animation: 'sweep 2.5s ease-in-out infinite',
+        }}
+      />
+      <style>{`
+        @keyframes sweep {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
   );
 };

@@ -111,12 +111,31 @@ const InternalDashboard: React.FC<InternalDashboardProps> = ({ userId }) => {
   return (
     <div className="flex-1 bg-slate-950 text-slate-100 p-6 overflow-y-auto">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center space-x-3 mb-8">
-          <ShieldAlert className="w-7 h-7 text-indigo-400" />
-          <div>
-            <h1 className="text-2xl font-bold text-white">Internal Observability Dashboard</h1>
-            <p className="text-slate-500 text-sm">View performance metrics & incidents.</p>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-3">
+            <ShieldAlert className="w-7 h-7 text-indigo-400" />
+            <div>
+              <h1 className="text-2xl font-bold text-white">Internal Observability Dashboard</h1>
+              <p className="text-slate-500 text-sm">SRE / Engineer view — not visible to end users</p>
+            </div>
           </div>
+          {openIncidents > 0 ? (
+            <div className="flex items-center space-x-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="text-red-400 text-sm font-medium">{openIncidents} active incident{openIncidents > 1 ? 's' : ''}</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <span className="text-emerald-400 text-sm font-medium">All systems operational</span>
+            </div>
+          )}
         </div>
 
         {/* KPI Cards */}

@@ -18,6 +18,43 @@ interface GroqIncidentResponse {
   fix: string;
 }
 
+function buildStaticIncident(events: AppEvent[], flags: string[]): GroqIncidentResponse {
+  const hasSpike = flags.includes('ERROR_SPIKE');
+  const hasFailure = flags.includes('AI_FAILURE');
+  const hasLatency = flags.includes('HIGH_LATENCY');
+  const hasFallbackSpike = flags.includes('FALLBACK_SPIKE');
+  const types = [...new Set(events.map((e) => e.type))].join(', ');
+
+  const severity: GroqIncidentResponse['severity'] =
+    hasSpike ? 'critical' : hasFailure ? 'high' : hasFallbackSpike ? 'medium' : hasLatency ? 'medium' : 'low';
+
+  const incident = hasSpike
+    ? `Repeated AI failures detected on ${types}`
+    : hasFailure
+    ? `AI operation failure on ${types}`
+    : hasFallbackSpike
+    ? `Primary AI provider degraded — repeated fallbacks to secondary provider`
+    : `High latency detected on ${types}`;
+
+  const rootCause = hasSpike
+    ? 'Multiple consecutive failures of the same operation type suggest an upstream provider outage or invalid API credentials.'
+    : hasFailure
+    ? 'Single AI operation failed — possible transient provider error or malformed request.'
+    : hasFallbackSpike
+    ? 'Primary provider (Groq) failing repeatedly, forcing fallback to secondary provider. Likely a rate limit, API outage, or expired key.'
+    : 'AI operation latency exceeded threshold — possible provider slowdown or large payload.';
+
+  const fix = hasSpike
+    ? 'Check Groq API key validity and provider status page.'
+    : hasFailure
+    ? 'Review error logs for the failed operation. Retry or switch provider if error persists.'
+    : hasFallbackSpike
+    ? 'Check https://status.groq.com. Verify GROQ_API_KEY is valid and not rate-limited.'
+    : 'Reduce payload size or switch to a faster model. Monitor for continued latency.';
+
+  return { incident, rootCause, severity, fix };
+}
+
 async function callGroqIncidentAnalysis(events: AppEvent[], flags: string[]): Promise<GroqIncidentResponse | null> {
   try {
     const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/analyze-incident`, {
@@ -36,8 +73,7 @@ async function callGroqIncidentAnalysis(events: AppEvent[], flags: string[]): Pr
 }
 
 export async function analyzeAnomaly(events: AppEvent[], flags: string[]): Promise<void> {
-  const analysis = await callGroqIncidentAnalysis(events, flags);
-  if (!analysis) return;
+  const analysis = (await callGroqIncidentAnalysis(events, flags)) ?? buildStaticIncident(events, flags);
 
   try {
     const { data: { session } } = await supabase.auth.getSession();

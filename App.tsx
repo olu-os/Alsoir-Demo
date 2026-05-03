@@ -560,10 +560,8 @@ const App: React.FC = () => {
       <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Layer 1: User-visible status — only shows operational/issues, no internal detail */}
-        <div className="flex justify-end px-4 py-2 bg-white border-b border-slate-100">
-          <StatusBanner userId={user.id} />
-        </div>
+        {/* Layer 1: User-visible status — only shows when there's an active incident */}
+        <StatusBanner userId={user.id} currentView={currentView} />
         <div className="flex-1 flex overflow-hidden">
         {currentView === 'inbox' && (
           <>
@@ -628,7 +626,7 @@ const App: React.FC = () => {
         {currentView === 'settings' && (
             <SettingsPage settings={settings} onUpdateSettings={handleUpdateSettings} />
         )}
-        {currentView === 'internal' && import.meta.env.DEV && (
+        {currentView === 'observability' && import.meta.env.DEV && (
             <InternalDashboard userId={user.id} />
         )}
         </div>
