@@ -438,7 +438,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         if (!message) return;
                                         const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
                                         // Find all involved messages
-                                        const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter(Boolean);
+                                        const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter((m): m is Message => m !== undefined);
                                         // Always substitute {NAME} with the correct senderName for each recipient
                                         const baseDraft = normalizeDraftName(replyTextRaw, message.senderName);
                                         for (const msg of allMsgs) {

@@ -69,3 +69,42 @@ export interface AnalysisResult {
   predictedCost: ResponseCost;
   tags: string[];
 }
+
+// --- Telemetry / Observability types (internal layer) ---
+
+export type AppEventType =
+  | 'AI_DRAFT_GENERATED'
+  | 'AI_CLASSIFICATION'
+  | 'FIND_SIMILAR'
+  | 'REPLY_SENT'
+  | 'AI_PROVIDER_FALLBACK'
+  | 'AI_PROVIDER_ERROR';
+
+export type AppEventStatus = 'success' | 'failed' | 'fallback';
+
+export interface AppEvent {
+  id?: string;
+  user_id?: string;
+  type: AppEventType;
+  status: AppEventStatus;
+  payload?: Record<string, unknown>;
+  latency_ms?: number;
+  error?: string;
+  created_at?: string;
+}
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type IncidentStatus = 'open' | 'investigating' | 'resolved';
+
+export interface Incident {
+  id?: string;
+  user_id?: string;
+  title: string;
+  root_cause?: string;
+  severity: IncidentSeverity;
+  suggested_fix?: string;
+  status: IncidentStatus;
+  linked_event_ids?: string[];
+  created_at?: string;
+  updated_at?: string;
+}

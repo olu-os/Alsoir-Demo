@@ -2,6 +2,7 @@
 import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCost, Message } from "../types";
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
+import { logEvent } from './telemetry';
 
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -190,15 +191,24 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
 }
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
+  const start = Date.now();
   // Try Groq first if provider is groq
   if (LLM_PROVIDER === 'groq') {
     const groqResult = await categorizeWithGroq(text);
-    if (groqResult) return groqResult;
+    if (groqResult) {
+      logEvent('AI_CLASSIFICATION', 'success', { provider: 'groq' }, Date.now() - start);
+      return groqResult;
+    }
+    logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'categorize' }, Date.now() - start);
   }
   // Fallback to Ollama
   const ollamaResult = await categorizeWithOllama(text);
-  if (ollamaResult) return ollamaResult;
+  if (ollamaResult) {
+    logEvent('AI_CLASSIFICATION', 'success', { provider: 'ollama' }, Date.now() - start);
+    return ollamaResult;
+  }
   // Fallback to General
+  logEvent('AI_CLASSIFICATION', 'failed', { provider: 'none', reason: 'all_providers_failed' }, Date.now() - start);
   return {
     category: MessageCategory.General,
     sentiment: Sentiment.Neutral,
@@ -309,23 +319,29 @@ export const generateDraftReply = async (
   signature: string,
   aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string> => {
+  const start = Date.now();
   let draft: string | null = null;
   if (LLM_PROVIDER === 'groq') {
     draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature, aiPersonality);
+    if (draft) {
+      logEvent('AI_DRAFT_GENERATED', 'success', { provider: 'groq', personality: aiPersonality }, Date.now() - start);
+      return draft;
+    }
+    logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'generate-draft' }, Date.now() - start);
   }
-  if (!draft) {
-    draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature, aiPersonality);
+  draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature, aiPersonality);
+  if (draft) {
+    logEvent('AI_DRAFT_GENERATED', 'success', { provider: 'ollama', personality: aiPersonality }, Date.now() - start);
+    return draft;
   }
-  if (!draft) {
-    // Fallback
-    draft = (
-      `Hi ${senderName || 'there'},\n\n` +
-      `Thanks for reaching out to ${businessName || 'us'}. I’m looking into this now and will help get it resolved. ` +
-      `Could you confirm your order number and any relevant details (e.g., tracking number or photos if applicable)?\n\n` +
-      `Thanks!`
-    );
-  }
-  return draft;
+  // Template fallback
+  logEvent('AI_DRAFT_GENERATED', 'fallback', { provider: 'template', reason: 'all_providers_failed' }, Date.now() - start);
+  return (
+    `Hi ${senderName || 'there'},\n\n` +
+    `Thanks for reaching out to ${businessName || 'us'}. I'm looking into this now and will help get it resolved. ` +
+    `Could you confirm your order number and any relevant details (e.g., tracking number or photos if applicable)?\n\n` +
+    `Thanks!`
+  );
 };
 
 
@@ -356,25 +372,32 @@ export const findSimilarMessages = async (
   console.log('[AI DEBUG] LLM_PROVIDER:', LLM_PROVIDER);
 
   // Try AI similarity (Groq or Ollama) as the primary method
+  const start = Date.now();
   try {
     if (LLM_PROVIDER === 'groq') {
       // eslint-disable-next-line no-console
       console.log('[AI DEBUG] Using Groq as provider');
       try {
-        return await findSimilarWithGroq(target, potentialMatches);
+        const result = await findSimilarWithGroq(target, potentialMatches);
+        logEvent('FIND_SIMILAR', 'success', { provider: 'groq', matchCount: result.length }, Date.now() - start);
+        return result;
       } catch (groqError) {
         // eslint-disable-next-line no-console
-        console.error('[Groq ERROR] Failed to get response from Groq:', groqError && (groqError.stack || groqError.message || groqError));
+        console.error('[Groq ERROR] Failed to get response from Groq:', groqError && ((groqError as any).stack || (groqError as any).message || groqError));
+        logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'find-similar' }, Date.now() - start);
         throw groqError;
       }
     }
     // eslint-disable-next-line no-console
     console.log('[AI DEBUG] Using Ollama as provider');
-    return await findSimilarWithOllama(target, potentialMatches);
+    const result = await findSimilarWithOllama(target, potentialMatches);
+    logEvent('FIND_SIMILAR', 'success', { provider: 'ollama', matchCount: result.length }, Date.now() - start);
+    return result;
   } catch (e) {
     // Fallback: use cosine similarity
     // eslint-disable-next-line no-console
-    console.warn('Falling back to cosine similarity:', e?.message || e);
+    console.warn('Falling back to cosine similarity:', (e as any)?.message || e);
+    logEvent('AI_PROVIDER_ERROR', 'failed', { operation: 'find-similar', fallback: 'cosine' }, Date.now() - start, (e as any)?.message);
     const [targetEmbedding] = await getEmbeddings([target.body]);
     const results = await Promise.all(
       potentialMatches.map(async (m) => {

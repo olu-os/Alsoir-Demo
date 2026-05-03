@@ -7,6 +7,9 @@ import Analytics from './components/Analytics';
 import PolicySettings from './components/PolicySettings';
 import SettingsPage from './components/SettingsPage';
 import SignIn from './components/SignIn';
+import StatusBanner from './components/StatusBanner';
+import InternalDashboard from './components/InternalDashboard';
+import { startAnomalyWorker, stopAnomalyWorker } from './services/anomalyWorker';
 import { INITIAL_POLICIES } from './constants';
 import { Message, BusinessPolicy } from './types';
 import { analyzeMessageContent } from './services/geminiService';
@@ -162,11 +165,20 @@ const App: React.FC = () => {
       setUser(session?.user ?? null);
       if (!session?.user) {
         setMessages([]);
+        stopAnomalyWorker();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Start anomaly worker when user is authenticated
+  useEffect(() => {
+    if (user?.id) {
+      startAnomalyWorker(user.id);
+    }
+    return () => { stopAnomalyWorker(); };
+  }, [user?.id]);
 
   // Only fetch messages for demo user, and never call fetch-gmail or Gmail API in demo mode
   useEffect(() => {
@@ -547,7 +559,12 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-white overflow-hidden">
       <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} />
 
-      <main className="flex-1 flex overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Layer 1: User-visible status — only shows operational/issues, no internal detail */}
+        <div className="flex justify-end px-4 py-2 bg-white border-b border-slate-100">
+          <StatusBanner userId={user.id} />
+        </div>
+        <div className="flex-1 flex overflow-hidden">
         {currentView === 'inbox' && (
           <>
             {/* Inbox List Column */}
@@ -611,6 +628,10 @@ const App: React.FC = () => {
         {currentView === 'settings' && (
             <SettingsPage settings={settings} onUpdateSettings={handleUpdateSettings} />
         )}
+        {currentView === 'internal' && import.meta.env.DEV && (
+            <InternalDashboard userId={user.id} />
+        )}
+        </div>
       </main>
     </div>
   );

@@ -126,3 +126,37 @@ CREATE TABLE IF NOT EXISTS sync_status (
 ALTER TABLE sync_status ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own sync status" ON sync_status FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS sync_status_user_provider_idx ON sync_status(user_id, provider);
+
+-- App Events (telemetry layer — internal only, never shown to end users)
+CREATE TABLE IF NOT EXISTS app_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,           -- e.g. AI_DRAFT_GENERATED, AI_PROVIDER_ERROR
+  status TEXT NOT NULL DEFAULT 'success', -- success | failed | fallback
+  payload JSONB DEFAULT '{}',   -- context: provider, model, message_id, etc.
+  latency_ms INTEGER,           -- how long the operation took
+  error TEXT,                   -- error message if status=failed
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE app_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own app events" ON app_events FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS app_events_user_created_idx ON app_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS app_events_type_status_idx ON app_events(type, status);
+
+-- Incidents (AI-generated — internal/SRE dashboard only, never shown to end users)
+CREATE TABLE IF NOT EXISTS incidents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  root_cause TEXT,
+  severity TEXT NOT NULL DEFAULT 'low', -- low | medium | high | critical
+  suggested_fix TEXT,
+  status TEXT NOT NULL DEFAULT 'open',  -- open | investigating | resolved
+  linked_event_ids TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own incidents" ON incidents FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS incidents_user_status_idx ON incidents(user_id, status);
+CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);

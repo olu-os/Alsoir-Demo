@@ -111,6 +111,23 @@ serve(async (req) => {
       const content = await callGroq(messages, 512, 0.3);
       return new Response(JSON.stringify({ draft: content.trim() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    if (pathname.endsWith("/analyze-incident")) {
+      const { events, flags } = await req.json();
+      const prompt = `You are an SRE incident analyst reviewing application telemetry events.\n\nAnomaly flags detected: ${(flags || []).join(', ')}\n\nRecent events:\n${JSON.stringify(events || [], null, 2)}\n\nBased on these events, provide:\n1. A concise incident title (1 sentence)\n2. Root cause hypothesis\n3. Severity: one of low, medium, high, critical\n4. Suggested fix or next action\n\nReturn ONLY valid JSON in this exact shape:\n{\n  "incident": "<title>",\n  "rootCause": "<root cause>",\n  "severity": "low|medium|high|critical",\n  "fix": "<suggested fix>"\n}`;
+      const messages = [
+        { role: 'system', content: 'You are an expert SRE incident analyst. Return only JSON.' },
+        { role: 'user', content: prompt },
+      ];
+      const content = await callGroq(messages, 512, 0);
+      let parsed;
+      try { parsed = JSON.parse(content); } catch { const match = content.match(/\{[\s\S]*\}/); parsed = match ? JSON.parse(match[0]) : {}; }
+      return new Response(JSON.stringify({
+        incident: parsed.incident || 'Unclassified incident',
+        rootCause: parsed.rootCause || 'Unknown',
+        severity: parsed.severity || 'medium',
+        fix: parsed.fix || 'Investigate logs',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     return new Response("Not Found", { status: 404, headers: corsHeaders });
   } catch (e) {
     return new Response(`Error: ${e.message || e}`, { status: 500, headers: corsHeaders });
