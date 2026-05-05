@@ -116,7 +116,7 @@ const InternalDashboard: React.FC<InternalDashboardProps> = ({ userId }) => {
             <ShieldAlert className="w-7 h-7 text-indigo-400" />
             <div>
               <h1 className="text-2xl font-bold text-white">Internal Observability Dashboard</h1>
-              <p className="text-slate-500 text-sm">SRE / Engineer view — not visible to end users</p>
+              <p className="text-slate-500 text-sm">View performance metrics & incidents.</p>
             </div>
           </div>
           {openIncidents > 0 ? (

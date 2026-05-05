@@ -109,7 +109,7 @@ const InternalDashboard: React.FC<InternalDashboardProps> = ({ userId }) => {
   }
 
   return (
-    <div className="flex-1 bg-slate-950 text-slate-100 p-6 overflow-y-auto">
+    <div className="flex-1 bg-slate-950 text-slate-100 p-20 overflow-y-auto">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center space-x-3 mb-8">
           <ShieldAlert className="w-7 h-7 text-indigo-400" />
