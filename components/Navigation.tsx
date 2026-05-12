@@ -19,8 +19,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
     <div className="w-20 lg:w-64 bg-slate-900 text-slate-300 flex flex-col justify-between h-full border-r border-slate-800 transition-all duration-300">
       <div>
         <div className="h-16 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
-          <div className="bg-indigo-600 p-2 rounded-lg">
-            <Sparkles className="w-6 h-6 text-white" />
+          <div className="bg-indigo-600 p-0.5 rounded-lg">
+            <img src="/logo.png" alt="Alsoir Logo" className="w-10 h-10" />
           </div>
           <span className="ml-3 font-bold text-white text-lg hidden lg:block">Alsoir</span>
         </div>
