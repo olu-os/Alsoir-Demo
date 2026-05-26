@@ -1,9 +1,8 @@
-// Utility to check if Groq is the selected provider
 function isGroqProvider() {
   const provider = (Deno.env.get('VITE_LLM_PROVIDER') || Deno.env.get('LLM_PROVIDER') || '').toLowerCase();
   return provider === 'groq';
 }
-// AI relevance filter: only keep if AI says it's a business/support inquiry
+
 async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
   try {
     const ollamaUrl = Deno.env.get("OLLAMA_BASE_URL") || "http://localhost:11434";
@@ -45,7 +44,6 @@ async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: 
   }
 }
 
-// GROQ relevance filter: only keep if AI says it's a business/support inquiry
 async function groqIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
   try {
     const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
@@ -111,10 +109,6 @@ const DEFAULT_MAX_RESULTS = 30;
 // No keyword filter; rely on AI for all filtering.
 const DEFAULT_GMAIL_QUERY =
   `in:inbox -from:me -in:spam -in:trash -category:social -category:forums -category:promotions`;
-
-
-
-
 
 // CORS headers to allow browser calls to this Edge Function
 const corsHeaders: Record<string, string> = {
@@ -323,7 +317,6 @@ async function mapWithLimit<T, R>(
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -359,7 +352,6 @@ serve(async (req) => {
     const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     if (debug && debugUserId) {
-      // Debug mode: seed a sample message for the given user without Gmail API
       const sampleId = crypto.randomUUID();
       const sample = {
         id: sampleId,

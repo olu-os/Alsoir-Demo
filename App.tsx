@@ -12,9 +12,10 @@ import InternalDashboard from './components/InternalDashboard';
 import { startAnomalyWorker, stopAnomalyWorker } from './services/anomalyWorker';
 import { INITIAL_POLICIES } from './constants';
 import { Message, BusinessPolicy } from './types';
-import { analyzeMessageContent } from './services/geminiService';
+import { analyzeMessageContent } from './services/AIMessageService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
+import { logEvent } from './services/telemetry';
 
 
 const subjectFallback = (subject: unknown, body: unknown): string | undefined => {
@@ -230,10 +231,12 @@ const App: React.FC = () => {
 
       if (raceResult.timedOut) {
         if (isMountedRef.current) setIsLoading(false);
+        logEvent('SYNC_GMAIL', 'failed', { reason: 'timeout' }, timeoutMs);
 
         invokePromise
           .then(async ({ data, error }) => {
             if (error) {
+              logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error' }, undefined, error.message);
               console.error('Manual sync function error (background):', error);
               const maybeAny: any = error as any;
               if (maybeAny?.context) {
@@ -243,11 +246,13 @@ const App: React.FC = () => {
               return;
             }
 
+            logEvent('SYNC_GMAIL', 'success', { background: true }, undefined);
             console.log('Manual sync response (background):', data);
             autoCategorizedForUserRef.current = null;
             await fetchData(session.user.id);
           })
           .catch((e) => {
+            logEvent('SYNC_GMAIL', 'failed', { reason: 'background_crash' }, undefined, (e as any)?.message);
             console.error('Manual sync invoke failed (background):', e);
           });
 
@@ -261,6 +266,7 @@ const App: React.FC = () => {
       const { data, error } = raceResult.res;
 
       if (error) {
+        logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error' }, undefined, error.message);
         console.error('Manual sync function error:', error);
         const maybeAny: any = error as any;
         if (maybeAny?.context) {
@@ -283,12 +289,14 @@ const App: React.FC = () => {
         }
         throw error;
       }
+      logEvent('SYNC_GMAIL', 'success', {}, undefined);
       console.log('Manual sync response:', data);
 
       autoCategorizedForUserRef.current = null;
       await fetchData(session.user.id);
 
     } catch (error: any) {
+      logEvent('SYNC_GMAIL', 'failed', { reason: 'unhandled_exception' }, undefined, error?.message);
       console.error("Manual sync failed:", error);
       alert("Failed to sync emails.");
     } finally {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Message, BusinessPolicy, ResponseCost } from '../types';
-import { generateDraftReply, findSimilarMessages } from '../services/geminiService';
+import { generateDraftReply, findSimilarMessages } from '../services/AIMessageService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
 import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X } from 'lucide-react';

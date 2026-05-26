@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as geminiService from '../services/geminiService';
+import * as AIMessageService from '../services/AIMessageService';
 import { MessageCategory, Sentiment, ResponseCost, Channel, Message } from '../types';
 
 describe('findSimilarMessages (unit, mocked AI)', () => {
@@ -38,9 +38,9 @@ describe('findSimilarMessages (unit, mocked AI)', () => {
     ];
 
     // Mock findSimilarMessages to always return msg1 as similar
-    vi.spyOn(geminiService, 'findSimilarMessages').mockResolvedValue(['msg1']);
+    vi.spyOn(AIMessageService, 'findSimilarMessages').mockResolvedValue(['msg1']);
 
-    const similarIds = await geminiService.findSimilarMessages(fakeMessages[0], fakeMessages);
+    const similarIds = await AIMessageService.findSimilarMessages(fakeMessages[0], fakeMessages);
     expect(similarIds).toContain('msg1');
   });
 });

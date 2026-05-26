@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as geminiService from '../services/geminiService';
+import * as AIMessageService from '../services/AIMessageService';
 import { MessageCategory, Sentiment, ResponseCost, Channel, Message } from '../types';
 
 // Mock UI state
@@ -73,19 +73,19 @@ describe('Message search filtering', () => {
 
 describe('Reply logic and error handling', () => {
   it('handles AI error gracefully', async () => {
-    vi.spyOn(geminiService, 'generateDraftReply').mockResolvedValueOnce('');
-    const draft = await geminiService.generateDraftReply('test', 'user', [], 'Business', 'Signature', 'support');
+    vi.spyOn(AIMessageService, 'generateDraftReply').mockResolvedValueOnce('');
+    const draft = await AIMessageService.generateDraftReply('test', 'user', [], 'Business', 'Signature', 'support');
     expect(typeof draft).toBe('string');
     expect(draft.length).toBeGreaterThanOrEqual(0);
   });
   it('handles invalid AI data', async () => {
-    vi.spyOn(geminiService, 'analyzeMessageContent').mockResolvedValueOnce({
+    vi.spyOn(AIMessageService, 'analyzeMessageContent').mockResolvedValueOnce({
       category: MessageCategory.General,
       sentiment: Sentiment.Neutral,
       predictedCost: ResponseCost.Low,
       tags: [],
     });
-    const result = await geminiService.analyzeMessageContent('test');
+    const result = await AIMessageService.analyzeMessageContent('test');
     expect(result.category).toBe(MessageCategory.General);
   });
 });

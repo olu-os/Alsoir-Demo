@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as geminiService from '../services/geminiService';
+import * as AIMessageService from '../services/AIMessageService';
 
 // --- Name normalization logic ---
 function getFirstName(fullName?: string) {

@@ -1,7 +1,7 @@
 // INTEGRATION TEST: This test uses the real AI and may be flaky if the model changes.
 
 import { describe, it, expect } from 'vitest';
-import { findSimilarMessages } from '../services/geminiService';
+import { findSimilarMessages } from '../services/AIMessageService';
 import { getEmbeddings, cosineSimilarity } from '../services/embeddingService';
 import { MessageCategory, Sentiment, ResponseCost, Channel, Message } from '../types';
 

@@ -1,4 +1,3 @@
-
 import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCost, Message } from "../types";
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';

@@ -78,7 +78,8 @@ export type AppEventType =
   | 'FIND_SIMILAR'
   | 'REPLY_SENT'
   | 'AI_PROVIDER_FALLBACK'
-  | 'AI_PROVIDER_ERROR';
+  | 'AI_PROVIDER_ERROR'
+  | 'SYNC_GMAIL';
 
 export type AppEventStatus = 'success' | 'failed' | 'fallback';
 
