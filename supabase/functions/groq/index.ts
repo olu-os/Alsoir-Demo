@@ -112,10 +112,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ draft: content.trim() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/analyze-incident")) {
-      const { events, flags } = await req.json();
-      const prompt = `You are an SRE incident analyst reviewing application telemetry events.\n\nAnomaly flags detected: ${(flags || []).join(', ')}\n\nRecent events:\n${JSON.stringify(events || [], null, 2)}\n\nBased on these events, provide:\n1. A concise incident title (1 sentence)\n2. Root cause hypothesis\n3. Severity: one of low, medium, high, critical\n4. Suggested fix or next action\n\nReturn ONLY valid JSON in this exact shape:\n{\n  "incident": "<title>",\n  "rootCause": "<root cause>",\n  "severity": "low|medium|high|critical",\n  "fix": "<suggested fix>"\n}`;
+      const { prompt, system_prompt } = await req.json();
       const messages = [
-        { role: 'system', content: 'You are an expert SRE incident analyst. Return only JSON.' },
+        { role: 'system', content: system_prompt || 'You are an expert SRE incident analyst. Return only JSON.' },
         { role: 'user', content: prompt },
       ];
       const content = await callGroq(messages, 512, 0);

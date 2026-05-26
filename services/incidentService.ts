@@ -3,11 +3,14 @@ import { AppEvent, Incident } from '../types';
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
 const SUPABASE_FUNCTIONS_URL = env.VITE_SUPABASE_FUNCTIONS_URL || '';
+const LLM_PROVIDER = env.VITE_LLM_PROVIDER || env.LLM_PROVIDER || '';
+const OLLAMA_BASE_URL = (env.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
+const OLLAMA_CHAT_MODEL = (env.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
 
 /**
  * Incident Service — Layer 3
  *
- * Sends flagged events to Groq for SRE-style root cause analysis,
+ * Sends flagged events to Groq (or Ollama in dev) for SRE-style root cause analysis,
  * then persists the resulting incident to the `incidents` table.
  */
 
@@ -23,6 +26,28 @@ function buildStaticIncident(events: AppEvent[], flags: string[]): GroqIncidentR
   const hasFailure = flags.includes('AI_FAILURE');
   const hasLatency = flags.includes('HIGH_LATENCY');
   const hasFallbackSpike = flags.includes('FALLBACK_SPIKE');
+
+  const scopeErrorEvent = events.find(
+    (e) =>
+      e.type === 'SYNC_GMAIL' &&
+      e.status === 'failed' &&
+      e.error &&
+      /insufficient.*(?:scope|permission)|ACCESS_TOKEN_SCOPE_INSUFFICIENT|403/i.test(e.error)
+  );
+
+  if (scopeErrorEvent) {
+    return {
+      incident: 'Gmail sync failed — OAuth scope missing',
+      rootCause:
+        'The user\'s Google OAuth token is missing the required `gmail.readonly` scope. The app requests it during sign-in, but the user may have declined the permission prompt or the Google Cloud OAuth consent screen does not include this scope.',
+      severity: 'high',
+      fix:
+        '1) In Google Cloud Console > APIs & Services > OAuth consent screen, add `https://www.googleapis.com/auth/gmail.readonly` to the scopes. ' +
+        '2) In Supabase Dashboard > Authentication > Google Provider, ensure the scope is listed under "Authorized scopes". ' +
+        '3) Ask the user to sign out and sign in again, accepting the Gmail permission prompt when presented.',
+    };
+  }
+
   const types = [...new Set(events.map((e) => e.type))].join(', ');
 
   const severity: GroqIncidentResponse['severity'] =
@@ -55,6 +80,21 @@ function buildStaticIncident(events: AppEvent[], flags: string[]): GroqIncidentR
   return { incident, rootCause, severity, fix };
 }
 
+const buildIncidentPrompt = (events: AppEvent[], flags: string[]): string =>
+  `You are an SRE incident analyst reviewing application telemetry events.\n\nAnomaly flags detected: ${(flags || []).join(', ')}\n\nRecent events:\n${JSON.stringify(events || [], null, 2)}\n\nBased on these events, provide:\n1. A concise incident title (1 sentence)\n2. Root cause hypothesis\n3. Severity: one of low, medium, high, critical\n4. Suggested fix or next action\n\nReturn ONLY valid JSON in this exact shape:\n{\n  "incident": "<title>",\n  "rootCause": "<root cause>",\n  "severity": "low|medium|high|critical",\n  "fix": "<suggested fix>"\n}`;
+
+const parseIncidentJson = (content: string): GroqIncidentResponse | null => {
+  try {
+    return JSON.parse(content) as GroqIncidentResponse;
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { return JSON.parse(match[0]) as GroqIncidentResponse; } catch {}
+    }
+  }
+  return null;
+};
+
 async function callGroqIncidentAnalysis(events: AppEvent[], flags: string[]): Promise<GroqIncidentResponse | null> {
   try {
     const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/analyze-incident`, {
@@ -72,8 +112,39 @@ async function callGroqIncidentAnalysis(events: AppEvent[], flags: string[]): Pr
   }
 }
 
+async function callOllamaIncidentAnalysis(events: AppEvent[], flags: string[]): Promise<GroqIncidentResponse | null> {
+  try {
+    const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
+    const prompt = buildIncidentPrompt(events, flags);
+    const response = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_CHAT_MODEL,
+        stream: false,
+        temperature: 0,
+        messages: [
+          { role: 'system', content: 'You are an expert SRE incident analyst. Return only JSON.' },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const content = json?.message?.content;
+    if (!content) return null;
+    return parseIncidentJson(content);
+  } catch (e) {
+    console.warn('[incidentService] Ollama call failed:', e);
+    return null;
+  }
+}
+
 export async function analyzeAnomaly(events: AppEvent[], flags: string[]): Promise<void> {
-  const analysis = (await callGroqIncidentAnalysis(events, flags)) ?? buildStaticIncident(events, flags);
+  const aiAnalysis = LLM_PROVIDER === 'groq'
+    ? await callGroqIncidentAnalysis(events, flags)
+    : await callOllamaIncidentAnalysis(events, flags);
+  const analysis = aiAnalysis ?? buildStaticIncident(events, flags);
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -94,7 +165,7 @@ export async function analyzeAnomaly(events: AppEvent[], flags: string[]): Promi
     if (error) {
       console.warn('[incidentService] Failed to insert incident:', error.message);
     } else {
-      console.log('[incidentService] Incident created:', analysis.incident, `[${analysis.severity}]`);
+      console.log('[incidentService] Incident created by ' + LLM_PROVIDER + ':', analysis.incident, `[${analysis.severity}]`);
     }
   } catch (e) {
     console.warn('[incidentService] analyzeAnomaly threw:', e);

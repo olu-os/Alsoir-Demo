@@ -25,14 +25,14 @@ function checkAnomalies(event: AppEvent): string[] {
     flags.push('HIGH_LATENCY');
   }
 
-  if (event.status === 'failed') {
+  if (event.status === 'failed' || event.status === 'fallback') {
     flags.push('AI_FAILURE');
   }
 
-  // Error spike: 3+ failures of the same type within the time window
+  // Error spike: 3+ failures or fallbacks of the same type within the time window
   const now = Date.now();
   const recentOfType = recentEvents
-    .filter((e) => e.type === event.type && e.status === 'failed' &&
+    .filter((e) => e.type === event.type && (e.status === 'failed' || e.status === 'fallback') &&
       e.created_at && (now - new Date(e.created_at).getTime()) < SPIKE_TIME_WINDOW_MS);
   if (recentOfType.length >= 3) {
     flags.push('ERROR_SPIKE');

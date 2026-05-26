@@ -223,7 +223,7 @@ const App: React.FC = () => {
           : undefined,
       } as any);
 
-      const timeoutMs = 3000;
+      const timeoutMs = 30000;
       const raceResult = await Promise.race([
         invokePromise.then((res) => ({ timedOut: false as const, res })),
         new Promise<{ timedOut: true }>((resolve) => setTimeout(() => resolve({ timedOut: true }), timeoutMs)),
@@ -236,13 +236,21 @@ const App: React.FC = () => {
         invokePromise
           .then(async ({ data, error }) => {
             if (error) {
-              logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error' }, undefined, error.message);
               console.error('Manual sync function error (background):', error);
               const maybeAny: any = error as any;
+              let errorDetail = error.message;
               if (maybeAny?.context) {
                 const ctx: any = maybeAny.context;
                 console.error('Manual sync function context (background):', ctx);
+                if (typeof ctx?.status === 'number' && typeof ctx?.clone === 'function') {
+                  try {
+                    const text = await ctx.clone().text();
+                    const parsed = JSON.parse(text);
+                    errorDetail = parsed?.details?.json?.error?.message || parsed?.error || text;
+                  } catch {}
+                }
               }
+              logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error', background: true }, undefined, errorDetail);
               return;
             }
 
@@ -266,9 +274,9 @@ const App: React.FC = () => {
       const { data, error } = raceResult.res;
 
       if (error) {
-        logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error' }, undefined, error.message);
         console.error('Manual sync function error:', error);
         const maybeAny: any = error as any;
+        let errorDetail = error.message;
         if (maybeAny?.context) {
           const ctx: any = maybeAny.context;
           console.error('Manual sync function context:', ctx);
@@ -277,16 +285,15 @@ const App: React.FC = () => {
               const text = await ctx.clone().text();
               console.error('Manual sync function response status:', ctx.status);
               console.error('Manual sync function response body:', text);
-              try {
-                console.error('Manual sync function response json:', JSON.parse(text));
-              } catch {
-                // ignore
-              }
+              const parsed = JSON.parse(text);
+              console.error('Manual sync function response json:', parsed);
+              errorDetail = parsed?.details?.json?.error?.message || parsed?.error || text;
             } catch (e) {
               console.error('Failed reading function error body:', e);
             }
           }
         }
+        logEvent('SYNC_GMAIL', 'failed', { reason: 'function_error', status: maybeAny?.context?.status }, undefined, errorDetail);
         throw error;
       }
       logEvent('SYNC_GMAIL', 'success', {}, undefined);
