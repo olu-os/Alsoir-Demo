@@ -2,29 +2,6 @@
 
 Live demo: https://alsoir.vercel.app
 
-## Demo Options (start here)
-
-### Option 1 — Demo Mode (no sign-in required)
-This is the fastest way to try the product. You can explore the UI, filtering, and AI drafts using pre-seeded messages.
-
-**Limitations:**
-- You cannot send your own custom emails to test categorization and similarity features.
-- Messages do not refresh or get categorized in real time.
-
-### Option 2 — Full Gmail Test (using test inbox)
-If you want to send your own emails to test the real-time categorization and similarity features, request access to the test gmail account.
-
-**Simplest request flow:**
-1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform).
-2. I will grant you access to alsoirtest@gmail.com after reviewing your request.
-
-**Sign in steps:**
-1. Click “Sign in with Google.”
-2. Sign in with the test email.
-3. Accept the Gmail API permission prompts.
-
-Once approved, you’ll see live inbox sync and auto-categorization.
-
 ## How the key features work
 
 - **Find Similar:** Select a message and use “Find Similar” to locate other messages about the same issue, then reply in bulk.
@@ -58,10 +35,32 @@ With features like the bulk-reply mode and AI Draft Generation, users can save t
 
 However, after the app is approved and authorized, this will be in development.
 
+## Demo Options
+
+### Option 1 — Demo Mode (no sign-in required)
+This is the fastest way to try the product. You can explore the UI, filtering, and AI drafts using pre-seeded messages.
+
+**Limitations:**
+- You cannot send your own custom emails to test categorization and similarity features.
+- Messages do not refresh or get categorized in real time.
+
+### Option 2 — Full Gmail Test (using test inbox)
+If you want to send your own emails to test the real-time categorization and similarity features, request access to the test gmail account.
+
+**Simplest request flow:**
+1. Fill out the [Access Form](https://docs.google.com/forms/d/e/1FAIpQLScSgsIjFk-MQytDVqrqTZBN--pGqv9FlWHMUeohpVvsDGNH2g/viewform).
+2. I will grant you access to alsoirtest@gmail.com after reviewing your request.
+
+**Sign in steps:**
+1. Click “Sign in with Google.”
+2. Sign in with the test email.
+3. Accept the Gmail API permission prompts.
+
+Once approved, you’ll see live inbox sync and auto-categorization.
+
 ## Devs: Run Locally
 
 **Prerequisites:**  Node.js
-
 
 1. Install dependencies:
    `npm install`
@@ -73,3 +72,6 @@ However, after the app is approved and authorized, this will be in development.
        - `VITE_OLLAMA_CHAT_MODEL` (default `gpt-oss:120b-cloud`)
 3. Run the app:
    `npm run dev`
+
+## Architecture Diagram:
+<img width="9742" height="5029" alt="Alsoir Architecture Diagram_" src="https://github.com/user-attachments/assets/f7c3b4b6-c0ec-44f3-8481-397019ce6549" />
