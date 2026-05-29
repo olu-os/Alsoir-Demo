@@ -141,10 +141,12 @@ async function callOllamaIncidentAnalysis(events: AppEvent[], flags: string[]): 
 }
 
 export async function analyzeAnomaly(events: AppEvent[], flags: string[]): Promise<void> {
-  const aiAnalysis = LLM_PROVIDER === 'groq'
+  const groqResult = LLM_PROVIDER === 'groq'
     ? await callGroqIncidentAnalysis(events, flags)
-    : await callOllamaIncidentAnalysis(events, flags);
-  const analysis = aiAnalysis ?? buildStaticIncident(events, flags);
+    : null;
+  const ollamaResult = groqResult ?? await callOllamaIncidentAnalysis(events, flags);
+  const analysis = ollamaResult ?? buildStaticIncident(events, flags);
+  const usedProvider = groqResult ? 'groq' : ollamaResult ? 'ollama' : 'static';
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -165,7 +167,7 @@ export async function analyzeAnomaly(events: AppEvent[], flags: string[]): Promi
     if (error) {
       console.warn('[incidentService] Failed to insert incident:', error.message);
     } else {
-      console.log('[incidentService] Incident created by ' + LLM_PROVIDER + ':', analysis.incident, `[${analysis.severity}]`);
+      console.log('[incidentService] Incident created by ' + usedProvider + ':', analysis.incident, `[${analysis.severity}]`);
     }
   } catch (e) {
     console.warn('[incidentService] analyzeAnomaly threw:', e);
