@@ -351,10 +351,12 @@ export const generateDraftReply = async (
 
 
 async function checkSimilarityCache(targetId: string, candidateIds: string[]): Promise<{ cachedSimilar: string[]; uncached: string[] }> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await supabase
-    .from('similarities')
+    .from('similarity_cache')
     .select('message_a_id, message_b_id, are_similar')
-    .or(`message_a_id.eq.${targetId},message_b_id.eq.${targetId}`);
+    .or(`message_a_id.eq.${targetId},message_b_id.eq.${targetId}`)
+    .gt('created_at', thirtyDaysAgo);
 
   const cache = new Map<string, boolean>();
   for (const row of data || []) {
@@ -380,7 +382,7 @@ async function storeSimilarityCache(targetId: string, results: Array<{ candidate
     return { message_a_id: a, message_b_id: b, are_similar: r.areSimilar };
   });
   try {
-    await supabase.from('similarities').upsert(entries, { onConflict: 'message_a_id,message_b_id' });
+    await supabase.from('similarity_cache').upsert(entries, { onConflict: 'message_a_id,message_b_id' });
   } catch (e) {
     console.warn('Failed to cache similarity results:', e);
   }

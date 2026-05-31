@@ -161,7 +161,7 @@ CREATE POLICY "Users manage own incidents" ON incidents FOR ALL USING (auth.uid(
 CREATE INDEX IF NOT EXISTS incidents_user_status_idx ON incidents(user_id, status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
 
-CREATE TABLE IF NOT EXISTS similarities (
+CREATE TABLE IF NOT EXISTS similarity_cache (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   message_a_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
   message_b_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -169,11 +169,22 @@ CREATE TABLE IF NOT EXISTS similarities (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(message_a_id, message_b_id)
 );
-ALTER TABLE similarities ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own similarities" ON similarities
+ALTER TABLE similarity_cache ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own similarity_cache" ON similarity_cache
   FOR ALL
   USING (
     EXISTS (SELECT 1 FROM messages m WHERE m.id = message_a_id AND m.user_id = auth.uid())
   );
-CREATE INDEX IF NOT EXISTS similarities_message_a_idx ON similarities(message_a_id);
-CREATE INDEX IF NOT EXISTS similarities_message_b_idx ON similarities(message_b_id);
+CREATE INDEX IF NOT EXISTS similarity_cache_message_a_idx ON similarity_cache(message_a_id);
+CREATE INDEX IF NOT EXISTS similarity_cache_message_b_idx ON similarity_cache(message_b_id);
+
+-- pg_cron: daily cleanup of stale similarity cache entries (older than 30 days)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+SELECT cron.schedule(
+  'cleanup_similarity_cache',
+  '0 5 * * *',
+  $$
+    DELETE FROM similarity_cache
+    WHERE created_at < NOW() - INTERVAL '30 days';
+  $$
+);
