@@ -639,7 +639,7 @@ const App: React.FC = () => {
         )}
 
         {currentView === 'settings' && (
-            <SettingsPage settings={settings} onUpdateSettings={handleUpdateSettings} />
+            <SettingsPage user={user} settings={settings} onUpdateSettings={handleUpdateSettings} />
         )}
         {currentView === 'observability' && import.meta.env.DEV && (
             <InternalDashboard userId={user.id} />

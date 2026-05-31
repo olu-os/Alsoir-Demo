@@ -1,12 +1,14 @@
 import React from 'react';
+import { User } from '@supabase/supabase-js';
 import { AppSettings } from '../types';
 
 interface SettingsPageProps {
+  user: User | null;
   settings: AppSettings & { bulkReplyMode?: 'autoSend' | 'draft' };
   onUpdateSettings: (settings: AppSettings & { bulkReplyMode?: 'autoSend' | 'draft' }) => void;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdateSettings }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSettings }) => {
     const setBulkReplyMode = (mode: 'autoSend' | 'draft') => {
       onUpdateSettings({ ...settings, bulkReplyMode: mode });
     };
@@ -84,6 +86,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdateSettings 
             </div>
           </div>
         </section>
+
+        {/* Signed-in User Info */}
+        {user && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mt-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Signed in as</h2>
+            <div>
+              <p className="font-medium text-slate-900">{user.user_metadata?.full_name || user.email}</p>
+              <p className="text-sm text-slate-500">{user.email}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
