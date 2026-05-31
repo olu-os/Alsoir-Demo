@@ -3,7 +3,7 @@ import { AppEvent } from '../types';
 import { analyzeAnomaly } from './incidentService';
 
 /**
- * Anomaly Worker — Layer 3
+ * Anomaly Worker — Reliability Layer 3
  *
  * Subscribes to Supabase Realtime INSERT events on `app_events`.
  * Applies rule-based anomaly detection and triggers AI incident analysis

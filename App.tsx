@@ -575,7 +575,7 @@ const App: React.FC = () => {
       <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Layer 1: User-visible status — only shows when there's an active incident */}
+        {/* Reliability Layer 1: User-visible status — only shows when there's an active incident */}
         <StatusBanner userId={user.id} currentView={currentView} />
         <div className="flex-1 flex overflow-hidden">
         {currentView === 'inbox' && (

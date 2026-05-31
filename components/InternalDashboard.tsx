@@ -9,7 +9,7 @@ import {
 import { AlertTriangle, CheckCircle, Clock, Zap, Activity, ShieldAlert } from 'lucide-react';
 
 /**
- * InternalDashboard — Layer 2 (Internal/engineer-facing only)
+ * InternalDashboard — Reliability Layer 2 (Internal/engineer-facing only)
  *
  * Shows real telemetry data: AI reliability, latency trends, fallback rates,
  * error rates, and AI-generated incidents. Gated behind /internal route.

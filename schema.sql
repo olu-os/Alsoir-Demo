@@ -160,3 +160,20 @@ ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own incidents" ON incidents FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS incidents_user_status_idx ON incidents(user_id, status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
+
+CREATE TABLE IF NOT EXISTS similarities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  message_a_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  message_b_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  are_similar BOOLEAN NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(message_a_id, message_b_id)
+);
+ALTER TABLE similarities ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own similarities" ON similarities
+  FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM messages m WHERE m.id = message_a_id AND m.user_id = auth.uid())
+  );
+CREATE INDEX IF NOT EXISTS similarities_message_a_idx ON similarities(message_a_id);
+CREATE INDEX IF NOT EXISTS similarities_message_b_idx ON similarities(message_b_id);

@@ -2,6 +2,7 @@ import { AnalysisResult, BusinessPolicy, MessageCategory, Sentiment, ResponseCos
 import { getEmbeddings, cosineSimilarity } from './embeddingService';
 import { decodeHtmlEntities } from './text';
 import { logEvent } from './telemetry';
+import { supabase } from './supabaseClient';
 
 
 const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -133,11 +134,12 @@ async function categorizeWithGroq(text: string): Promise<AnalysisResult | null> 
   if (!response.ok) return null;
   const data = await response.json();
   if (!data || typeof data.category !== 'string') return null;
+  const tags = Array.isArray(data.tags) ? data.tags.filter((t: any) => typeof t === 'string') : [data.category];
   return {
     category: data.category as MessageCategory,
     sentiment: Sentiment.Neutral,
     predictedCost: data.predictedCost as ResponseCost || ResponseCost.Low,
-    tags: [data.category],
+    tags,
   };
 }
 
@@ -146,7 +148,7 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
     const base = String(OLLAMA_BASE_URL).replace(/\/$/, '');
     const url = `${base}/api/chat`;
     const model = await getOllamaChatModel();
-    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.\n\nMessage: "${text}"\n\nRespond ONLY with a valid JSON object: {"category": "<category>", "reason": "<short reason>"}`;
+    const prompt = `Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other. Also assign tags — an array of categories or topics that apply. A message can have multiple tags if multiple topics are relevant (e.g. a complaint about late shipping gets tags ["Shipping", "Complaint"]).\n\nMessage: "${text}"\n\nRespond ONLY with a valid JSON object: {"category": "<category>", "reason": "<short reason>", "tags": ["tag1", "tag2", ...]}`;
     const payload = {
       model,
       stream: false,
@@ -177,11 +179,14 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
       }
     }
     const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((t: any) => typeof t === 'string')
+      : [category];
     return {
       category: category as MessageCategory,
       sentiment: Sentiment.Neutral,
       predictedCost: ResponseCost.Low,
-      tags: [category],
+      tags,
     };
   } catch (e) {
     console.warn('Ollama categorization failed:', e);
@@ -345,66 +350,101 @@ export const generateDraftReply = async (
 
 
 
+async function checkSimilarityCache(targetId: string, candidateIds: string[]): Promise<{ cachedSimilar: string[]; uncached: string[] }> {
+  const { data } = await supabase
+    .from('similarities')
+    .select('message_a_id, message_b_id, are_similar')
+    .or(`message_a_id.eq.${targetId},message_b_id.eq.${targetId}`);
+
+  const cache = new Map<string, boolean>();
+  for (const row of data || []) {
+    if (row.message_a_id === targetId) cache.set(row.message_b_id, row.are_similar);
+    if (row.message_b_id === targetId) cache.set(row.message_a_id, row.are_similar);
+  }
+
+  const cachedSimilar: string[] = [];
+  const uncached: string[] = [];
+  for (const id of candidateIds) {
+    if (cache.has(id)) {
+      if (cache.get(id)) cachedSimilar.push(id);
+    } else {
+      uncached.push(id);
+    }
+  }
+  return { cachedSimilar, uncached };
+}
+
+async function storeSimilarityCache(targetId: string, results: Array<{ candidateId: string; areSimilar: boolean }>) {
+  const entries = results.map(r => {
+    const [a, b] = [targetId, r.candidateId].sort();
+    return { message_a_id: a, message_b_id: b, are_similar: r.areSimilar };
+  });
+  try {
+    await supabase.from('similarities').upsert(entries, { onConflict: 'message_a_id,message_b_id' });
+  } catch (e) {
+    console.warn('Failed to cache similarity results:', e);
+  }
+}
+
 export const findSimilarMessages = async (
   target: Message,
   candidates: Message[]
 ): Promise<string[]> => {
-  // Remove the target from candidates
   const withoutTarget = candidates.filter((m) => m.id !== target.id);
   if (withoutTarget.length === 0) return [];
 
-  let potentialMatches = withoutTarget;
-  const shouldPreferCategory =
-    !!target.category && target.category !== MessageCategory.General;
+  const targetTags = (target.tags || []).filter((t) => t !== 'General');
+  if (targetTags.length === 0) return [];
 
-  if (shouldPreferCategory) {
-    const sameCategory = withoutTarget.filter((m) => m.category === target.category);
-    const otherCategory = withoutTarget.filter((m) => m.category !== target.category);
-    potentialMatches = [...sameCategory, ...otherCategory];
-  }
+  const tagged = withoutTarget.filter(
+    (m) => m.tags && m.tags.some((t) => t !== 'General' && targetTags.includes(t))
+  );
+  if (tagged.length === 0) return [];
 
-  // Hard cap to keep prompts fast.
-  potentialMatches = potentialMatches.slice(0, 50);
+  let potentialMatches = tagged.slice(0, 50);
 
-  // Debug logging for provider selection
-  // eslint-disable-next-line no-console
-  console.log('[AI DEBUG] LLM_PROVIDER:', LLM_PROVIDER);
+  // Check similarity cache first
+  const candidateIds = potentialMatches.map(m => m.id);
+  const { cachedSimilar, uncached } = await checkSimilarityCache(target.id, candidateIds);
+  if (uncached.length === 0) return cachedSimilar;
 
-  // Try AI similarity (Groq or Ollama) as the primary method
+  // Filter to only uncached candidates for AI computation
+  const uncachedMessages = potentialMatches.filter(m => uncached.includes(m.id));
+  potentialMatches = uncachedMessages;
+
   const start = Date.now();
+  let computedIds: string[] = [];
   try {
     if (LLM_PROVIDER === 'groq') {
-      // eslint-disable-next-line no-console
-      console.log('[AI DEBUG] Using Groq as provider');
       try {
-        const result = await findSimilarWithGroq(target, potentialMatches);
-        logEvent('FIND_SIMILAR', 'success', { provider: 'groq', matchCount: result.length }, Date.now() - start);
-        return result;
+        computedIds = await findSimilarWithGroq(target, potentialMatches);
+        logEvent('FIND_SIMILAR', 'success', { provider: 'groq', matchCount: computedIds.length, cachedCount: cachedSimilar.length }, Date.now() - start);
       } catch (groqError) {
-        // eslint-disable-next-line no-console
-        console.error('[Groq ERROR] Failed to get response from Groq:', groqError && ((groqError as any).stack || (groqError as any).message || groqError));
         logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'find-similar' }, Date.now() - start);
         throw groqError;
       }
+    } else {
+      computedIds = await findSimilarWithOllama(target, potentialMatches);
+      logEvent('FIND_SIMILAR', 'success', { provider: 'ollama', matchCount: computedIds.length, cachedCount: cachedSimilar.length }, Date.now() - start);
     }
-    // eslint-disable-next-line no-console
-    console.log('[AI DEBUG] Using Ollama as provider');
-    const result = await findSimilarWithOllama(target, potentialMatches);
-    logEvent('FIND_SIMILAR', 'success', { provider: 'ollama', matchCount: result.length }, Date.now() - start);
-    return result;
   } catch (e) {
-    // Fallback: use cosine similarity
-    // eslint-disable-next-line no-console
     console.warn('Falling back to cosine similarity:', (e as any)?.message || e);
     logEvent('AI_PROVIDER_ERROR', 'failed', { operation: 'find-similar', fallback: 'cosine' }, Date.now() - start, (e as any)?.message);
-    const [targetEmbedding] = await getEmbeddings([target.body]);
-    const results = await Promise.all(
-      potentialMatches.map(async (m) => {
-        const [emb] = await getEmbeddings([m.body]);
-        return { id: m.id, sim: cosineSimilarity(targetEmbedding, emb) };
-      })
-    );
-    // Return IDs with similarity above 0.15
-    return results.filter(r => r.sim > 0.15).map(r => r.id);
+    const allTexts = [target.body, ...potentialMatches.map(m => m.body)];
+    const allEmbeddings = await getEmbeddings(allTexts);
+    const targetEmbedding = allEmbeddings[0];
+    computedIds = potentialMatches
+      .map((m, i) => ({ id: m.id, sim: cosineSimilarity(targetEmbedding, allEmbeddings[i + 1]) }))
+      .filter(r => r.sim > 0.15)
+      .map(r => r.id);
   }
+  
+  const computedSet = new Set(computedIds);
+  const cacheResults = potentialMatches.map(m => ({
+    candidateId: m.id,
+    areSimilar: computedSet.has(m.id),
+  }));
+  await storeSimilarityCache(target.id, cacheResults);
+
+  return [...cachedSimilar, ...computedIds];
 };

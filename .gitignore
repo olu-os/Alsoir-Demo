@@ -10,6 +10,7 @@ dist/
 *.sqlite
 .idea/
 .vscode/
+AGENTS.md
 
 supabase/functions/.env
 supabase/functions/fetch-gmail/.env

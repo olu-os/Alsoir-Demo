@@ -8,7 +8,7 @@ const OLLAMA_BASE_URL = (env.VITE_OLLAMA_BASE_URL as string | undefined) || 'htt
 const OLLAMA_CHAT_MODEL = (env.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
 
 /**
- * Incident Service — Layer 3
+ * Incident Service — Reliability Layer 3
  *
  * Sends flagged events to Groq (or Ollama in dev) for SRE-style root cause analysis,
  * then persists the resulting incident to the `incidents` table.

@@ -66,8 +66,9 @@ serve(async (req) => {
       const prompt = [
         'You are a customer support AI that classifies messages.',
         'Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.',
+        'Also assign tags — an array of categories or topics that apply to this message. A message CAN have multiple tags if multiple topics are relevant (e.g. a complaint about a late shipment could have tags ["Shipping", "Complaint"]; a question about returns after 2 years could have tags ["Returns", "General"]; a wrong-item complaint could have tags ["Product", "Complaint", "Returns"]). The primary category is the single best fit; tags can be broader.',
         'For the field predicted_cost, think: What happens if I don\'t respond to this soon? Is there a risk of a bad review, lost customer, or serious negative consequence if this is not handled promptly? If the message doesn\'t display dissatisfaction, it will be low predicted cost.',
-        'Respond ONLY with a valid JSON object: {"category": "<category>", "predicted_cost": "Low|Medium|High", "reason": "<short reason>"}',
+        'Respond ONLY with a valid JSON object: {"category": "<category>", "predicted_cost": "Low|Medium|High", "reason": "<short reason>", "tags": ["tag1", "tag2", ...]}',
         '',
         `Message: "${text}"`
       ].join('\n');
@@ -78,10 +79,12 @@ serve(async (req) => {
       const content = await callGroq(messages, 512);
       let parsed;
       try { parsed = JSON.parse(content); } catch { const match = content.match(/\{[\s\S]*\}/); parsed = match ? JSON.parse(match[0]) : {}; }
+      const tags = Array.isArray(parsed.tags) ? parsed.tags.filter((t: any) => typeof t === 'string') : [parsed.category || 'General'];
       return new Response(JSON.stringify({
         category: parsed.category || 'General',
         predictedCost: parsed.predicted_cost || 'Low',
-        reason: parsed.reason || ''
+        reason: parsed.reason || '',
+        tags
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/generate-draft")) {

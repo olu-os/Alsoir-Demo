@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 /**
- * StatusBanner — Layer 1
+ * StatusBanner — Reliability Layer 1
  */
 
 interface StatusBannerProps {
