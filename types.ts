@@ -54,6 +54,7 @@ export interface Message {
   predictedCost: ResponseCost;
   suggestedReply?: string;
   tags: string[];
+  threadId?: string;
 }
 
 export interface BusinessPolicy {

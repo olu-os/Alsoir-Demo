@@ -42,7 +42,6 @@ const getOllamaChatModel = async (): Promise<string> => {
   return cachedOllamaModel;
 };
 
-// Call Supabase Edge Function for Groq-powered similarity
 const SUPABASE_FUNCTIONS_URL = env.VITE_SUPABASE_FUNCTIONS_URL || '';
 const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/find-similar`, {
@@ -124,7 +123,6 @@ const ALLOWED_CATEGORIES = [
   'Other',
 ];
 
-// Call Supabase Edge Function for Groq-powered categorization
 async function categorizeWithGroq(text: string): Promise<AnalysisResult | null> {
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/categorize`, {
     method: 'POST',
@@ -196,7 +194,6 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
 
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
   const start = Date.now();
-  // Try Groq first if provider is groq
   if (LLM_PROVIDER === 'groq') {
     const groqResult = await categorizeWithGroq(text);
     if (groqResult) {
@@ -205,7 +202,7 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
     }
     logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'categorize' }, Date.now() - start);
   }
-  // Fallback to Ollama
+
   const ollamaResult = await categorizeWithOllama(text);
   if (ollamaResult) {
     logEvent('AI_CLASSIFICATION', 'success', { provider: 'ollama' }, Date.now() - start);
@@ -221,8 +218,6 @@ export const analyzeMessageContent = async (text: string): Promise<AnalysisResul
   };
 };
 
-
-// Call Supabase Edge Function for Groq-powered draft generation
 export const generateDraftWithGroq = async (
   messageText: string,
   senderName: string,
@@ -405,16 +400,17 @@ export const findSimilarMessages = async (
 
   let potentialMatches = tagged.slice(0, 50);
 
-  // Check similarity cache first
+  const start = Date.now();
+
   const candidateIds = potentialMatches.map(m => m.id);
   const { cachedSimilar, uncached } = await checkSimilarityCache(target.id, candidateIds);
-  if (uncached.length === 0) return cachedSimilar;
+  if (uncached.length === 0) {
+    logEvent('FIND_SIMILAR', 'success', { provider: 'cache', matchCount: cachedSimilar.length, cachedCount: cachedSimilar.length }, Date.now() - start);
+    return cachedSimilar;
+  }
 
-  // Filter to only uncached candidates for AI computation
   const uncachedMessages = potentialMatches.filter(m => uncached.includes(m.id));
   potentialMatches = uncachedMessages;
-
-  const start = Date.now();
   let computedIds: string[] = [];
   try {
     if (LLM_PROVIDER === 'groq') {

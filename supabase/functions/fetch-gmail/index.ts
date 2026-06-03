@@ -45,6 +45,8 @@ async function aiIsRelevant(subject: string, body: string): Promise<{ relevant: 
 }
 
 async function groqIsRelevant(subject: string, body: string): Promise<{ relevant: boolean; reason?: string }> {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(JSON.stringify({ event: 'groq_relevant_request', requestId, subject: subject.slice(0, 100) }));
   try {
     const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
     const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
@@ -60,6 +62,7 @@ async function groqIsRelevant(subject: string, body: string): Promise<{ relevant
       stream: false,
     };
 
+    const start = Date.now();
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -68,10 +71,17 @@ async function groqIsRelevant(subject: string, body: string): Promise<{ relevant
       },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return { relevant: true };
+    const latency = Date.now() - start;
+    if (!res.ok) {
+      console.log(JSON.stringify({ event: 'groq_relevant_response', requestId, status: res.status, latency }));
+      return { relevant: true };
+    }
     const json = await res.json();
     const content = json?.choices?.[0]?.message?.content;
-    if (!content) return { relevant: true };
+    if (!content) {
+      console.log(JSON.stringify({ event: 'groq_relevant_response', requestId, latency, contentLength: 0 }));
+      return { relevant: true };
+    }
 
     let parsed;
     try {
@@ -85,7 +95,9 @@ async function groqIsRelevant(subject: string, body: string): Promise<{ relevant
       }
     }
 
-    return { relevant: !!parsed.relevant, reason: parsed.reason };
+    const result = { relevant: !!parsed.relevant, reason: parsed.reason };
+    console.log(JSON.stringify({ event: 'groq_relevant_response', requestId, latency, result }));
+    return result;
   } catch (e) {
     console.warn('Groq AI relevance filter failed:', e);
     return { relevant: true };
@@ -243,6 +255,8 @@ async function categorizeWithOllama(subject: string, body: string): Promise<Anal
 
 // GROQ categorization function
 async function categorizeWithGroq(subject: string, body: string): Promise<AnalysisResult | null> {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(JSON.stringify({ event: 'groq_categorize_request', requestId, subject: subject.slice(0, 100) }));
   try {
     const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
     const groqModel = Deno.env.get("GROQ_CHAT_MODEL") || "openai/gpt-oss-120b";
@@ -257,6 +271,7 @@ async function categorizeWithGroq(subject: string, body: string): Promise<Analys
       temperature: 0,
       stream: false,
     };
+    const start = Date.now();
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -265,10 +280,17 @@ async function categorizeWithGroq(subject: string, body: string): Promise<Analys
       },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return null;
+    const latency = Date.now() - start;
+    if (!res.ok) {
+      console.log(JSON.stringify({ event: 'groq_categorize_response', requestId, status: res.status, latency }));
+      return null;
+    }
     const json = await res.json();
     const content = json?.choices?.[0]?.message?.content;
-    if (!content) return null;
+    if (!content) {
+      console.log(JSON.stringify({ event: 'groq_categorize_response', requestId, latency, contentLength: 0 }));
+      return null;
+    }
     let parsed;
     try {
       parsed = JSON.parse(content);
@@ -283,12 +305,9 @@ async function categorizeWithGroq(subject: string, body: string): Promise<Analys
     const category = typeof parsed.category === 'string' && ALLOWED_CATEGORIES.includes(parsed.category) ? parsed.category : 'General';
     let predicted_cost = typeof parsed.predicted_cost === 'string' ? parsed.predicted_cost.trim() : '';
     if (!['Low', 'Medium', 'High'].includes(predicted_cost)) predicted_cost = 'Low';
-    return {
-      category,
-      sentiment: 'Neutral',
-      predicted_cost,
-      tags: [category],
-    };
+    const result = { category, sentiment: 'Neutral' as const, predicted_cost, tags: [category] };
+    console.log(JSON.stringify({ event: 'groq_categorize_response', requestId, latency, result }));
+    return result;
   } catch (e) {
     console.warn('Groq AI categorization failed:', e);
     return null;

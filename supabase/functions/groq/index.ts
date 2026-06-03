@@ -16,6 +16,13 @@ async function callGroq(messages, max_tokens = 1024, temperature = 0) {
     max_tokens,
     temperature,
   };
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(JSON.stringify({
+    event: 'groq_request',
+    requestId,
+    model: GROQ_MODEL,
+  }));
+  const start = Date.now();
   const res = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
@@ -24,9 +31,27 @@ async function callGroq(messages, max_tokens = 1024, temperature = 0) {
     },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Groq API error");
+  const latency = Date.now() - start;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.log(JSON.stringify({
+      event: 'groq_response',
+      requestId,
+      status: res.status,
+      latency,
+      error: body.slice(0, 500),
+    }));
+    throw new Error("Groq API error");
+  }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
+  const content = data.choices?.[0]?.message?.content || "";
+  console.log(JSON.stringify({
+    event: 'groq_response',
+    requestId,
+    status: res.status,
+    latency
+  }));
+  return content;
 }
 
 serve(async (req) => {

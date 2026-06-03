@@ -44,6 +44,7 @@ const normalizeDbMessageRow = (row: any): Message => ({
   predictedCost: row.predicted_cost,
   suggestedReply: row.ai_draft_response ?? undefined,
   tags: Array.isArray(row.tags) ? row.tags : [],
+  threadId: row.thread_id ?? undefined,
 });
 
 // Demo user email constant
@@ -513,9 +514,49 @@ const App: React.FC = () => {
   };
 
   const handleReplySent = async (ids: string[], reply: string) => {
-    console.log(`Sending reply to ${ids.length} recipients: ${reply}`);
-    const updatedMessages = messages.map(m => 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.provider_token || isDemoUser) {
+      const updatedMessages = messages.map(m =>
         ids.includes(m.id) ? { ...m, isReplied: true } : m
+      );
+      setMessages(updatedMessages);
+      return;
+    }
+
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+    const headers = anonKey
+      ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
+      : undefined;
+
+    for (const id of ids) {
+      const msg = messages.find(m => m.id === id);
+      if (!msg || !msg.senderHandle) continue;
+
+      const subject = msg.subject
+        ? msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`
+        : 'Re: Your inquiry';
+
+      try {
+        const { error } = await supabase.functions.invoke('send-email', {
+          body: {
+            session,
+            to: msg.senderHandle,
+            subject,
+            body: reply,
+            threadId: msg.threadId,
+            messageId: msg.id,
+          },
+          headers,
+        } as any);
+
+        if (error) continue;
+      } catch (e) {
+        continue;
+      }
+    }
+
+    const updatedMessages = messages.map(m =>
+      ids.includes(m.id) ? { ...m, isReplied: true } : m
     );
     setMessages(updatedMessages);
   };

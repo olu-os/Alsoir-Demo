@@ -5,7 +5,7 @@ import { startEtsyOAuth } from '../services/etsyService';
 const SignIn: React.FC = () => {
     const handleGoogleLogin = async () => {
         try {
-            const scopes = 'openid email profile https://www.googleapis.com/auth/gmail.readonly';
+            const scopes = 'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
             const redirectTo = import.meta.env.VITE_SUPABASE_REDIRECT_URL || window.location.origin;
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
