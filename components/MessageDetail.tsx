@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Message, BusinessPolicy, ResponseCost } from '../types';
 import { generateDraftReply, findSimilarMessages } from '../services/AIMessageService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
-import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X, Trash2 } from 'lucide-react';
 
 interface MessageDetailProps {
     message: Message | null;
@@ -17,11 +17,11 @@ interface MessageDetailProps {
     aiPersonality: 'support' | 'rapper' | 'medieval';
     onUpdateAiPersonality: (value: 'support' | 'rapper' | 'medieval') => void;
     bulkReplyMode?: 'autoSend' | 'draft';
-    sentRepliesByMessage: { [messageId: string]: string[] };
-    setSentRepliesByMessage: React.Dispatch<React.SetStateAction<{ [messageId: string]: string[] }>>;
+    sentRepliesByMessage: { [messageId: string]: Array<{ body: string; sentAt: string }> };
+    onMessageTrashed?: (messageId: string) => void;
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, sentRepliesByMessage, setSentRepliesByMessage }) => {
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, sentRepliesByMessage, onMessageTrashed }) => {
     const [replyTextRaw, setReplyTextRaw] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isFindingSimilar, setIsFindingSimilar] = useState(false);
@@ -29,6 +29,49 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [selectedSimilarIds, setSelectedSimilarIds] = useState<Set<string>>(new Set());
     const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
+    const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const openDropdown = () => {
+        if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+        setDropdownState('open');
+    };
+
+    const closeDropdown = () => {
+        setDropdownState('closing');
+        closeTimeoutRef.current = setTimeout(() => {
+            setDropdownState('closed');
+        }, 120);
+    };
+
+    const toggleDropdown = () => {
+        if (dropdownState === 'open') {
+            closeDropdown();
+        } else if (dropdownState === 'closed') {
+            openDropdown();
+        }
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (
+                dropdownRef.current &&
+                !dropdownRef.current.contains(e.target as Node) &&
+                dropdownState === 'open'
+            ) {
+                closeDropdown();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [dropdownState]);
+
+    useEffect(() => {
+        return () => {
+            if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+        };
+    }, []);
 
     const getFirstName = (fullName?: string) => {
         const senderName = (fullName || '').trim();
@@ -139,6 +182,13 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setSelectedSimilarIds(newSet);
     };
 
+    const handleMoveToTrash = () => {
+        if (message && onMessageTrashed) {
+            onMessageTrashed(message.id);
+        }
+        closeDropdown();
+    };
+
     const handleForwardToTask = () => {
         setShowTaskToast(true);
         setTimeout(() => setShowTaskToast(false), 3000);
@@ -152,9 +202,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         const baseDraft = normalizeDraftName(replyTextRaw, message.senderName);
         const personalized = baseDraft.replaceAll('{NAME}', getFirstName(message.senderName));
         onReplySent([message.id], personalized);
-        const updatedReplies = { ...sentRepliesByMessage };
-        updatedReplies[message.id] = [...(updatedReplies[message.id] || []), personalized];
-        setSentRepliesByMessage(updatedReplies);
         setDrafts(prev => {
             const newDrafts = { ...prev };
             delete newDrafts[message.id];
@@ -197,7 +244,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         <div className="flex-1 flex flex-col h-full bg-white relative">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
-                <div>
+                <div key={message.id} className="animate-fade-in">
                     <h1 className="text-xl font-bold text-slate-900 mb-1">{message.subject || 'Conversation'}</h1>
                     <div className="flex items-center space-x-2 text-sm text-slate-500">
                         <span>From: <span className="font-medium text-slate-700">{message.senderName}</span></span>
@@ -207,7 +254,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         <span>{message.senderHandle}</span>
                     </div>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 items-start">
                     <button
                         onClick={handleForwardToTask}
                         className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors flex items-center space-x-1"
@@ -215,15 +262,33 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     >
                         <Forward className="w-5 h-5" />
                     </button>
-                    <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
-                        <MoreHorizontal className="w-5 h-5" />
-                    </button>
+                    <div className="relative" ref={dropdownRef}>
+                        <button
+                            onClick={toggleDropdown}
+                            className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+                        >
+                            <MoreHorizontal className="w-5 h-5" />
+                        </button>
+                        {(dropdownState === 'open' || dropdownState === 'closing') && (
+                            <div
+                                className={`absolute right-0 top-full mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1 origin-top-right ${dropdownState === 'open' ? 'animate-scale-in' : 'animate-scale-out'}`}
+                            >
+                                <button
+                                    onClick={handleMoveToTrash}
+                                    className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Move to Trash</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Message Body */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl">
+            <div key={message.id} className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl animate-fade-up">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
@@ -253,7 +318,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Sent Replies */}
                 {sentRepliesByMessage[message.id]?.map((reply, index) => (
-                    <div key={index} className="mt-6 max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div key={index} className="mt-6 max-w-3xl animate-fade-up" style={{ animationDelay: `${index * 100}ms` }}>
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
@@ -261,11 +326,11 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 </div>
                                 <div>
                                     <div className="font-medium text-slate-900">Your Reply</div>
-                                    <div className="text-xs text-slate-500">{new Date().toLocaleString()}</div>
+                                    <div className="text-xs text-slate-500">{(() => { const d = new Date(reply.sentAt); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
                                 </div>
                             </div>
                             <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                {reply}
+                                {reply.body}
                             </div>
                         </div>
                     </div>
@@ -273,7 +338,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Similar Messages Panel */}
                 {similarMessages.length > 0 && (
-                    <div className="mt-6 max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="mt-6 max-w-3xl animate-fade-up" style={{ animationDelay: '80ms' }}>
                         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
@@ -308,7 +373,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                                 <span className="font-medium text-sm text-slate-900">{similar.senderName}</span>
                                                 <span className="text-xs text-slate-400">{(() => { const d = new Date(similar.timestamp); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}` })()}</span>
                                             </div>
-                                            <p className="text-xs text-slate-600 truncate">{similar.body}</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs text-slate-600 truncate">{similar.body}</p>
+                                                {similar.isReplied && (
+                                                    <span className="text-xs text-purple-600 font-medium ml-2 whitespace-nowrap">Replied</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -444,10 +514,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         for (const msg of allMsgs) {
                                             const personalized = baseDraft.replaceAll('{NAME}', getFirstName(msg.senderName));
                                             await onReplySent([msg.id], personalized);
-                                            setSentRepliesByMessage(prev => ({
-                                                ...prev,
-                                                [msg.id]: [...(prev[msg.id] || []), personalized]
-                                            }));
                                         }
                                         setDrafts(prev => {
                                             const newDrafts = { ...prev };

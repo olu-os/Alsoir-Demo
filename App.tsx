@@ -9,6 +9,7 @@ import SettingsPage from './components/SettingsPage';
 import SignIn from './components/SignIn';
 import StatusBanner from './components/StatusBanner';
 import InternalDashboard from './components/InternalDashboard';
+import TrashFolder from './components/TrashFolder';
 import { startAnomalyWorker, stopAnomalyWorker } from './services/anomalyWorker';
 import { INITIAL_POLICIES } from './constants';
 import { Message, BusinessPolicy } from './types';
@@ -16,6 +17,7 @@ import { analyzeMessageContent } from './services/AIMessageService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
 import { logEvent } from './services/telemetry';
+import { Undo2 } from 'lucide-react';
 
 
 const subjectFallback = (subject: unknown, body: unknown): string | undefined => {
@@ -45,6 +47,7 @@ const normalizeDbMessageRow = (row: any): Message => ({
   suggestedReply: row.ai_draft_response ?? undefined,
   tags: Array.isArray(row.tags) ? row.tags : [],
   threadId: row.thread_id ?? undefined,
+  trashedAt: row.metadata?.trashed_at ?? undefined,
 });
 
 // Demo user email constant
@@ -75,7 +78,14 @@ const App: React.FC = () => {
     aiPersonality: 'support'
   });
 
-  const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: string[] }>({});
+  const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: Array<{ body: string; sentAt: string }> }>({});
+  const [trashedMessages, setTrashedMessages] = useState<Message[]>([]);
+  const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+  const [undoToast, setUndoToast] = useState<{
+    messageIds: string[];
+    messages: Message[];
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const handleUpdateSettings = (updated: typeof settings) => {
     setSettings({ ...settings, ...updated });
@@ -89,13 +99,13 @@ const App: React.FC = () => {
   const autoCategorizedForUserRef = useRef<string | null>(null);
   const realtimeChannelRef = useRef<any>(null);
 
-    // Poll for new messages every 5 seconds when user is logged in
+    // Poll for new messages every 30 seconds when user is logged in
     useEffect(() => {
       if (!user?.id) return;
       setIsLoading(true);
       const interval = setInterval(() => {
         fetchData(user.id, true);
-      }, 5000);
+      }, 30000);
       return () => {
         clearInterval(interval);
         setIsLoading(false);
@@ -326,7 +336,8 @@ const App: React.FC = () => {
       }
 
       if (msgs && msgs.length > 0) {
-        const normalizedMessages: Message[] = msgs.map(normalizeDbMessageRow);
+        const filtered = msgs.filter((m: any) => !(m.metadata?.trashed));
+        const normalizedMessages: Message[] = filtered.map(normalizeDbMessageRow);
         setMessages(normalizedMessages);
       } else {
         setMessages([]);
@@ -347,6 +358,21 @@ const App: React.FC = () => {
           content: p.content,
           category: p.category
         })));
+      }
+
+      const { data: replies, error: repliesError } = await supabase
+        .from('message_replies')
+        .select('*')
+        .eq('user_id', userId)
+        .order('sent_at', { ascending: true });
+
+      if (!repliesError && replies) {
+        const grouped: { [messageId: string]: Array<{ body: string; sentAt: string }> } = {};
+        for (const r of replies) {
+          if (!grouped[r.message_id]) grouped[r.message_id] = [];
+          grouped[r.message_id].push({ body: r.body, sentAt: r.sent_at });
+        }
+        setSentRepliesByMessage(grouped);
       }
 
     } catch (err) {
@@ -425,6 +451,9 @@ const App: React.FC = () => {
 
 
 
+          const newPayload = (payload as any).new;
+          if (newPayload.metadata?.trashed) return;
+
           setMessages((prev) => {
             if (prev.some((m) => m.id === normalized.id)) return prev;
             return [normalized, ...prev];
@@ -500,6 +529,342 @@ const App: React.FC = () => {
     setUser(null); // Force UI update
   };
 
+  const fetchTrashedMessages = async () => {
+    if (!user?.id) return;
+    setIsLoadingTrash(true);
+    try {
+      const { data: msgs, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .filter('metadata->>trashed', 'eq', 'true')
+        .order('received_at', { ascending: false });
+
+      if (error) {
+        console.error('Fetch trashed messages error:', error);
+      } else if (msgs) {
+        setTrashedMessages(msgs.map(normalizeDbMessageRow));
+      } else {
+        setTrashedMessages([]);
+      }
+    } catch (err) {
+      console.error('fetchTrashedMessages failed:', err);
+    } finally {
+      setIsLoadingTrash(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === 'trash' && user?.id) {
+      fetchTrashedMessages();
+    }
+  }, [currentView, user?.id]);
+
+  const trashMessageInGmail = async (messageId: string) => {
+    if (isDemoUser) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.provider_token) return;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      await supabase.functions.invoke('trash-gmail', {
+        body: { session, messageId, action: 'trash', userId: user?.id },
+        headers: anonKey
+          ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
+          : undefined,
+      } as any);
+    } catch (e) {
+      console.warn('Failed to sync trash to Gmail:', e);
+    }
+  };
+
+  const restoreMessageInGmail = async (messageId: string) => {
+    if (isDemoUser) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.provider_token) return;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      await supabase.functions.invoke('trash-gmail', {
+        body: { session, messageId, action: 'restore', userId: user?.id },
+        headers: anonKey
+          ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
+          : undefined,
+      } as any);
+    } catch (e) {
+      console.warn('Failed to sync restore to Gmail:', e);
+    }
+  };
+
+  const handleMessageTrashed = async (id: string) => {
+    const messageToTrash = messages.find(m => m.id === id);
+    if (!messageToTrash) return;
+
+    const previousMessages = messages;
+    setMessages(prev => prev.filter(m => m.id !== id));
+    if (selectedMessageId === id) {
+      setSelectedMessageId(null);
+    }
+
+    if (undoToast) {
+      clearTimeout(undoToast.timer);
+      setUndoToast({
+        messageIds: [...undoToast.messageIds, id],
+        messages: [...undoToast.messages, messageToTrash],
+        timer: setTimeout(() => setUndoToast(null), 5000),
+      });
+    } else {
+      const timer = setTimeout(() => setUndoToast(null), 5000);
+      setUndoToast({ messageIds: [id], messages: [messageToTrash], timer });
+    }
+
+    try {
+      const { data: current } = await supabase
+        .from('messages')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+      const existingMetadata = (current as any)?.metadata || {};
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          metadata: {
+            ...existingMetadata,
+            trashed: true,
+            trashed_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      logEvent('MESSAGE_TRASHED', 'success', { messageId: id });
+      trashMessageInGmail(id);
+    } catch (e) {
+      console.error('Failed to trash message:', e);
+      setMessages(previousMessages);
+      logEvent('MESSAGE_TRASHED', 'failed', { messageId: id }, undefined, (e as any)?.message);
+    }
+  };
+
+  const handleUndoTrash = async () => {
+    if (!undoToast) return;
+    clearTimeout(undoToast.timer);
+    const { messageIds, messages: undoneMessages } = undoToast;
+    setUndoToast(null);
+
+    setMessages(prev => [...undoneMessages, ...prev].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+
+    for (const id of messageIds) {
+      try {
+        const { data: current } = await supabase
+          .from('messages')
+          .select('metadata')
+          .eq('id', id)
+          .single();
+        const existingMetadata = (current as any)?.metadata || {};
+        const newMetadata = { ...existingMetadata };
+        delete newMetadata.trashed;
+        delete newMetadata.trashed_at;
+        await supabase
+          .from('messages')
+          .update({ metadata: newMetadata })
+          .eq('id', id);
+        logEvent('MESSAGE_RESTORED', 'success', { messageId: id, action: 'undo' });
+        restoreMessageInGmail(id);
+      } catch (e) {
+        console.error('Failed to undo trash:', e);
+      }
+    }
+  };
+
+  const handleRestoreMessage = async (id: string) => {
+    setTrashedMessages(prev => prev.filter(m => m.id !== id));
+
+    try {
+      const { data: current } = await supabase
+        .from('messages')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+      const existingMetadata = (current as any)?.metadata || {};
+      const newMetadata = { ...existingMetadata };
+      delete newMetadata.trashed;
+      delete newMetadata.trashed_at;
+      const { error } = await supabase
+        .from('messages')
+        .update({ metadata: newMetadata })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      logEvent('MESSAGE_RESTORED', 'success', { messageId: id });
+      restoreMessageInGmail(id);
+
+      if (user?.id) {
+        const { data: restored } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (restored) {
+          const normalized = normalizeDbMessageRow(restored);
+          setMessages(prev => [normalized, ...prev].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to restore message:', e);
+      fetchTrashedMessages();
+    }
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    setTrashedMessages(prev => prev.filter(m => m.id !== id));
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      logEvent('MESSAGE_PURGED', 'success', { messageId: id });
+
+      if (!isDemoUser) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.provider_token) {
+            await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${session.provider_token}` },
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to delete from Gmail:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to permanently delete message:', e);
+      fetchTrashedMessages();
+    }
+  };
+
+  const handleBulkTrash = async (ids: string[]) => {
+    const messagesToTrash = messages.filter(m => ids.includes(m.id));
+    if (messagesToTrash.length === 0) return;
+
+    const previousMessages = messages;
+    setMessages(prev => prev.filter(m => !ids.includes(m.id)));
+    if (selectedMessageId && ids.includes(selectedMessageId)) {
+      setSelectedMessageId(null);
+    }
+
+    if (undoToast) {
+      clearTimeout(undoToast.timer);
+      setUndoToast({
+        messageIds: [...undoToast.messageIds, ...ids],
+        messages: [...undoToast.messages, ...messagesToTrash],
+        timer: setTimeout(() => setUndoToast(null), 5000),
+      });
+    } else {
+      const timer = setTimeout(() => setUndoToast(null), 5000);
+      setUndoToast({ messageIds: ids, messages: messagesToTrash, timer });
+    }
+
+    for (const id of ids) {
+      try {
+        const { data: current } = await supabase
+          .from('messages')
+          .select('metadata')
+          .eq('id', id)
+          .single();
+        const existingMetadata = (current as any)?.metadata || {};
+        const { error } = await supabase
+          .from('messages')
+          .update({
+            metadata: {
+              ...existingMetadata,
+              trashed: true,
+              trashed_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+        logEvent('MESSAGE_TRASHED', 'success', { messageId: id, bulk: true });
+        trashMessageInGmail(id);
+      } catch (e) {
+        console.error(`Failed to trash message ${id}:`, e);
+        setMessages(previousMessages);
+        logEvent('MESSAGE_TRASHED', 'failed', { messageId: id, bulk: true }, undefined, (e as any)?.message);
+        break;
+      }
+    }
+  };
+
+  const handleBulkRestore = async (ids: string[]) => {
+    setTrashedMessages(prev => prev.filter(m => !ids.includes(m.id)));
+
+    for (const id of ids) {
+      try {
+        const { data: current } = await supabase
+          .from('messages')
+          .select('metadata')
+          .eq('id', id)
+          .single();
+        const existingMetadata = (current as any)?.metadata || {};
+        const newMetadata = { ...existingMetadata };
+        delete newMetadata.trashed;
+        delete newMetadata.trashed_at;
+        await supabase
+          .from('messages')
+          .update({ metadata: newMetadata })
+          .eq('id', id);
+        logEvent('MESSAGE_RESTORED', 'success', { messageId: id, bulk: true });
+        restoreMessageInGmail(id);
+      } catch (e) {
+        console.error(`Failed to restore message ${id}:`, e);
+      }
+    }
+
+    if (user?.id) {
+      await fetchTrashedMessages();
+      await fetchData(user.id);
+    }
+  };
+
+  const handleBulkPermanentDelete = async (ids: string[]) => {
+    setTrashedMessages(prev => prev.filter(m => !ids.includes(m.id)));
+
+    for (const id of ids) {
+      try {
+        await supabase.from('messages').delete().eq('id', id);
+        logEvent('MESSAGE_PURGED', 'success', { messageId: id, bulk: true });
+      } catch (e) {
+        console.error(`Failed to delete message ${id}:`, e);
+      }
+    }
+
+    if (!isDemoUser) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.provider_token) {
+          for (const id of ids) {
+            try {
+              await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${session.provider_token}` },
+              });
+            } catch (e) {
+              console.warn(`Failed to delete ${id} from Gmail:`, e);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to delete from Gmail:', e);
+      }
+    }
+  };
+
   const handleSelectMessage = async (id: string) => {
     const updatedMessages = messages.map(m => 
       m.id === id ? { ...m, isRead: true } : m
@@ -537,7 +902,7 @@ const App: React.FC = () => {
         : 'Re: Your inquiry';
 
       try {
-        const { error } = await supabase.functions.invoke('send-email', {
+        const { data: sendData, error } = await supabase.functions.invoke('send-email', {
           body: {
             session,
             to: msg.senderHandle,
@@ -545,20 +910,51 @@ const App: React.FC = () => {
             body: reply,
             threadId: msg.threadId,
             messageId: msg.id,
+            userId: user?.id,
+            replyBody: reply,
           },
           headers,
-        } as any);
+        } as any) as any;
 
         if (error) continue;
+
+        const resp = sendData || {};
+        if (resp.dbError) {
+          console.warn('send-email DB write issue:', resp.dbError);
+        }
       } catch (e) {
         continue;
       }
     }
 
-    const updatedMessages = messages.map(m =>
-      ids.includes(m.id) ? { ...m, isReplied: true } : m
-    );
-    setMessages(updatedMessages);
+    if (user?.id) {
+      const { data: freshMessages } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('id', ids);
+      if (freshMessages) {
+        const normalized = freshMessages.map(normalizeDbMessageRow);
+        setMessages(prev => prev.map(m =>
+          normalized.find((f: Message) => f.id === m.id) || m
+        ));
+      }
+      const { data: freshReplies } = await supabase
+        .from('message_replies')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('message_id', ids);
+      if (freshReplies) {
+        setSentRepliesByMessage(prev => {
+          const next = { ...prev };
+          for (const r of freshReplies as any[]) {
+            if (!next[r.message_id]) next[r.message_id] = [];
+            next[r.message_id].push({ body: r.body, sentAt: r.sent_at });
+          }
+          return next;
+        });
+      }
+    }
   };
 
   const handleUpdatePolicies = async (updatedPolicies: BusinessPolicy[]) => {
@@ -633,17 +1029,22 @@ const App: React.FC = () => {
                 onSelect={handleSelectMessage}
                 isLoading={isLoading}
                 onManualSync={handleManualSync}
-                showSyncedToast={showSyncedToast}
                 drafts={drafts}
                 demoMode={isDemoUser}
+                onBulkTrash={handleBulkTrash}
               />
             </div>
 
             {/* Message Detail Column */}
             <div className={`
                 ${!selectedMessageId ? 'hidden lg:flex' : 'w-full flex'} 
-                flex-1 flex-col h-full bg-slate-50
+                flex-1 flex-col h-full bg-slate-50 relative
             `}>
+                {showSyncedToast && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">
+                    Messages Synced
+                  </div>
+                )}
                 {selectedMessageId && (
                      <button 
                         onClick={() => setSelectedMessageId(null)}
@@ -653,26 +1054,37 @@ const App: React.FC = () => {
                      </button>
                 )}
                <MessageDetail 
-                 message={selectedMessage} 
-                 allMessages={messages}
-                 policies={policies}
-                 onReplySent={handleReplySent}
-                 drafts={drafts}
-                 setDrafts={setDrafts}
-                 businessName={settings.businessName}
-                 signature={settings.signature}
-                 aiPersonality={settings.aiPersonality}
-                 onUpdateAiPersonality={handleUpdateAiPersonality}
-                 bulkReplyMode={settings.bulkReplyMode}
-                 sentRepliesByMessage={sentRepliesByMessage}
-                 setSentRepliesByMessage={setSentRepliesByMessage}
-               />
+                  message={selectedMessage} 
+                  allMessages={messages}
+                  policies={policies}
+                  onReplySent={handleReplySent}
+                  drafts={drafts}
+                  setDrafts={setDrafts}
+                  businessName={settings.businessName}
+                  signature={settings.signature}
+                  aiPersonality={settings.aiPersonality}
+                  onUpdateAiPersonality={handleUpdateAiPersonality}
+                  bulkReplyMode={settings.bulkReplyMode}
+                   sentRepliesByMessage={sentRepliesByMessage}
+                  onMessageTrashed={handleMessageTrashed}
+                />
             </div>
           </>
         )}
 
         {currentView === 'analytics' && (
             <Analytics messages={messages} />
+        )}
+
+        {currentView === 'trash' && (
+            <TrashFolder
+              trashedMessages={trashedMessages}
+              onRestore={handleRestoreMessage}
+              onPermanentDelete={handlePermanentDelete}
+              onBulkRestore={handleBulkRestore}
+              onBulkDelete={handleBulkPermanentDelete}
+              isLoading={isLoadingTrash}
+            />
         )}
 
         {currentView === 'policies' && (
@@ -686,6 +1098,23 @@ const App: React.FC = () => {
             <InternalDashboard userId={user.id} />
         )}
         </div>
+
+        {undoToast && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-4 animate-bounce-in z-50">
+            <span className="text-sm font-medium">
+              {undoToast.messageIds.length === 1
+                ? 'Message moved to trash'
+                : `${undoToast.messageIds.length} messages moved to trash`}
+            </span>
+            <button
+              onClick={handleUndoTrash}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+            >
+              <Undo2 className="w-4 h-4" />
+              <span>Undo</span>
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

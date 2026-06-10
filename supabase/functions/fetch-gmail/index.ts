@@ -630,12 +630,58 @@ serve(async (req) => {
 
     const ids = batchIds.slice(0, 2);
     const skippedCount = irrelevantIds.length;
+
+    let externallyTrashedCount = 0;
+    try {
+      const trashResponse = await fetch(
+        `${GMAIL_API_URL}?q=${encodeURIComponent('in:trash')}&maxResults=50`,
+        { headers: { Authorization: `Bearer ${session.provider_token}` } },
+      );
+      if (trashResponse.ok) {
+        const trashList = await trashResponse.json();
+        const trashedGmailIds: string[] = Array.isArray(trashList?.messages)
+          ? trashList.messages.map((m: any) => m.id)
+          : [];
+
+        if (trashedGmailIds.length > 0) {
+          const { data: ourMessages } = await supabaseAdmin
+            .from("messages")
+            .select("id, metadata")
+            .eq("user_id", userId)
+            .in("id", trashedGmailIds);
+
+          if (ourMessages) {
+            for (const msg of ourMessages) {
+              const metadata = (msg as any).metadata || {};
+              if (!metadata.trashed) {
+                const { error: updateError } = await supabaseAdmin
+                  .from("messages")
+                  .update({
+                    metadata: {
+                      ...metadata,
+                      trashed: true,
+                      trashed_at: new Date().toISOString(),
+                    },
+                  })
+                  .eq("id", (msg as any).id)
+                  .eq("user_id", userId);
+                if (!updateError) externallyTrashedCount++;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to sync external trash state:", e);
+    }
+
     return jsonResponse(
       {
-        message: `Synced ${totalEnriched} emails (in batches of 2). Skipped ${skippedCount}. Purged ${deletedIrrelevantCount}.`,
+        message: `Synced ${totalEnriched} emails (in batches of 2). Skipped ${skippedCount}. Purged ${deletedIrrelevantCount}. Externally trashed: ${externallyTrashedCount}.`,
         ids,
         skippedCount,
         purgedCount: deletedIrrelevantCount,
+        externallyTrashedCount,
         query: q,
         maxResults: safeMaxResults,
       },

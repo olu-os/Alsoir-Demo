@@ -1,6 +1,6 @@
 import React from 'react';
 import { Message, MessageCategory, ResponseCost, Channel } from '../types';
-import { Search, Filter, Instagram, Mail, ShoppingBag } from 'lucide-react';
+import { Search, Filter, Instagram, Mail, ShoppingBag, Trash2, CheckSquare, Square } from 'lucide-react';
 import { filterMessagesBySearch, filterMessagesByFeature } from '../services/filterMessages';
 
 interface MessageListProps {
@@ -9,9 +9,9 @@ interface MessageListProps {
   onSelect: (id: string) => void;
   isLoading: boolean;
   onManualSync: () => void;
-  showSyncedToast: boolean;
   drafts: { [id: string]: string };
   demoMode?: boolean;
+  onBulkTrash?: (ids: string[]) => void;
 }
 
 const getChannelIcon = (channel: Channel) => {
@@ -41,13 +41,15 @@ const getCostIndicator = (cost: ResponseCost) => {
     }
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, showSyncedToast, drafts, demoMode }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, drafts, demoMode, onBulkTrash }) => {
   const [filter, setFilter] = React.useState('');
   const [selectedCategories, setSelectedCategories] = React.useState<MessageCategory[]>([]);
   const [selectedUrgencies, setSelectedUrgencies] = React.useState<ResponseCost[]>([]);
   const [isFilterExpanded, setIsFilterExpanded] = React.useState(false);
   const [selectedIdx, setSelectedIdx] = React.useState<number>(-1);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const [bulkSelectedIds, setBulkSelectedIds] = React.useState<Set<string>>(new Set());
+  const lastClickedIdxRef = React.useRef<number | null>(null);
 
   const filteredMessages = React.useMemo(() => {
     let result = filterMessagesBySearch(messages, filter);
@@ -104,6 +106,49 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
     }
   };
 
+  const toggleBulkSelect = (id: string, idx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (e.shiftKey && lastClickedIdxRef.current !== null) {
+      const start = Math.min(lastClickedIdxRef.current, idx);
+      const end = Math.max(lastClickedIdxRef.current, idx);
+      setBulkSelectedIds(prev => {
+        const next = new Set(prev);
+        for (let i = start; i <= end; i++) {
+          next.add(filteredMessages[i].id);
+        }
+        return next;
+      });
+    } else {
+      setBulkSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+    
+    lastClickedIdxRef.current = idx;
+  };
+
+  const toggleBulkSelectAll = () => {
+    if (bulkSelectedIds.size === filteredMessages.length) {
+      setBulkSelectedIds(new Set());
+      lastClickedIdxRef.current = null;
+    } else {
+      setBulkSelectedIds(new Set(filteredMessages.map(m => m.id)));
+      lastClickedIdxRef.current = null;
+    }
+  };
+
+  const handleBulkTrash = () => {
+    if (onBulkTrash && bulkSelectedIds.size > 0) {
+      onBulkTrash(Array.from(bulkSelectedIds));
+      setBulkSelectedIds(new Set());
+      lastClickedIdxRef.current = null;
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-slate-200 w-full md:w-80 lg:w-96">
       <div className="p-4 border-b border-slate-100">
@@ -111,12 +156,16 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
           <h2 className="text-xl font-bold text-slate-800">
             Inbox {demoMode && <span className="text-indigo-600">(Demo)</span>}
           </h2>
-          <div className="flex items-center">
-            {showSyncedToast && (
-              <div className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap animate-fade-in-out mr-0">
-                Messages Synced
-              </div>
-            )}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={toggleBulkSelectAll}
+              className="p-2 rounded-md hover:bg-slate-100 text-slate-500"
+              title={bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0 ? 'Deselect All' : 'Select All'}
+            >
+              {bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0
+                ? <CheckSquare className="w-4 h-4 text-indigo-600" />
+                : <Square className="w-4 h-4" />}
+            </button>
             <button 
               onClick={onManualSync} 
               disabled={isLoading}
@@ -141,6 +190,21 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
             </button>
           </div>
         </div>
+
+        {bulkSelectedIds.size > 0 && (
+          <div className="mb-3 flex items-center space-x-2 p-2 bg-indigo-50 rounded-lg border border-indigo-200">
+            <span className="text-xs font-medium text-indigo-900 flex-1">
+              {bulkSelectedIds.size} selected
+            </span>
+            <button
+              onClick={handleBulkTrash}
+              className="flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Trash</span>
+            </button>
+          </div>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
@@ -222,39 +286,52 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
               onClick={() => onSelect(msg.id)}
               className={`w-full p-4 border-b text-left transition-colors hover:bg-slate-50 group focus:outline-none ${
                 selectedId === msg.id ? 'bg-indigo-50 border-l-4 border-l-indigo-600' : 'border-l-4 border-l-transparent'
-              }`}
+              } ${bulkSelectedIds.has(msg.id) ? 'bg-indigo-50/50' : ''}`}
             >
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center space-x-2">
-                    {getChannelIcon(msg.channel)}
-                    <span className={`font-semibold text-sm truncate max-w-[120px] ${!msg.isRead ? 'text-slate-900' : 'text-slate-600'}`}>
-                        {msg.senderName}
+              <div className="flex items-start space-x-2">
+                <div
+                  className="flex-shrink-0 mt-0.5"
+                  onClick={(e) => toggleBulkSelect(msg.id, idx, e)}
+                >
+                  {bulkSelectedIds.has(msg.id)
+                    ? <CheckSquare className="w-4 h-4 text-indigo-600" />
+                    : <Square className="w-4 h-4 text-slate-400" />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="flex items-center space-x-2">
+                        {getChannelIcon(msg.channel)}
+                        <span className={`font-semibold text-sm truncate max-w-[120px] ${!msg.isRead ? 'text-slate-900' : 'text-slate-600'}`}>
+                            {msg.senderName}
+                        </span>
+                        {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
+                    </div>
+                    <span className="text-xs text-slate-400 whitespace-nowrap">
+                      {new Date(msg.timestamp).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </span>
-                    {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
-                </div>
-                <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {new Date(msg.timestamp).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                </span>
-              </div>
-              <h4 className="text-xs font-medium text-slate-500 mb-1 truncate">{msg.subject || 'No Subject'}</h4>
-              <p className="text-sm text-slate-600 line-clamp-2 mb-2">
-                {msg.body}
-              </p>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category)}`}>
-                      {msg.category}
-                  </span>
-                  {/* Show Drafting label if a draft exists for this message. */}
-                  {drafts[msg.id] && (
-                    <div className="text-xs text-indigo-600 font-medium mt-3">Drafting...</div>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2">
-                     <div className="flex items-center space-x-1" title={`Predicted Response Cost: ${msg.predictedCost}`}>
-                        <span className="text-[10px] text-slate-400">Urgency:</span>
-                        {getCostIndicator(msg.predictedCost)}
-                     </div>
+                  </div>
+                  <h4 className="text-xs font-medium text-slate-500 mb-1 truncate">{msg.subject || 'No Subject'}</h4>
+                  <p className="text-sm text-slate-600 line-clamp-2 mb-2">
+                    {msg.body}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category)}`}>
+                          {msg.category}
+                      </span>
+                      {/* Show Drafting label if a draft exists for this message. */}
+                      {drafts[msg.id] && (
+                        <div className="text-xs text-indigo-600 font-medium mt-3">Drafting...</div>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                         <div className="flex items-center space-x-1" title={`Predicted Response Cost: ${msg.predictedCost}`}>
+                            <span className="text-[10px] text-slate-400">Urgency:</span>
+                            {getCostIndicator(msg.predictedCost)}
+                         </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </button>

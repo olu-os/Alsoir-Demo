@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const GMAIL_SEND_URL = `${GMAIL_BASE}/messages/send`;
@@ -28,7 +29,7 @@ serve(async (req) => {
   }
 
   try {
-    const { session, to, subject, body, threadId, messageId } = await req.json();
+    const { session, to, subject, body, threadId, messageId, userId, replyBody } = await req.json();
 
     if (!session?.provider_token) {
       return new Response(
@@ -78,9 +79,9 @@ serve(async (req) => {
     const email = emailLines.join("\r\n");
     const raw = base64UrlEncode(email);
 
-    const payload: { raw: string; threadId?: string } = { raw };
+    const apiPayload: { raw: string; threadId?: string } = { raw };
     if (threadId) {
-      payload.threadId = threadId;
+      apiPayload.threadId = threadId;
     }
 
     const res = await fetch(GMAIL_SEND_URL, {
@@ -89,7 +90,7 @@ serve(async (req) => {
         "Authorization": `Bearer ${session.provider_token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(apiPayload),
     });
 
     if (!res.ok) {
@@ -102,8 +103,44 @@ serve(async (req) => {
 
     const data = await res.json();
 
+    let dbInserted = false;
+    let dbError: string | null = null;
+
+    const SUPABASE_URL = Deno.env.get("FUNCTION_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL") ?? "";
+    const SERVICE_ROLE_KEY = Deno.env.get("FUNCTION_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    if (SUPABASE_URL && SERVICE_ROLE_KEY && userId && messageId) {
+      try {
+        const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+        const { error: insertError } = await supabaseAdmin.from("message_replies").insert({
+          message_id: messageId,
+          user_id: userId,
+          body: replyBody || body,
+          via_channel: "Email",
+          external_id: data.id || null,
+          status: "sent",
+        });
+
+        if (insertError) {
+          dbError = `insert failed: ${insertError.message}`;
+        } else {
+          const { error: updateError } = await supabaseAdmin.from("messages").update({ is_replied: true }).eq("id", messageId).eq("user_id", userId);
+          if (updateError) {
+            dbError = `reply inserted but is_replied update failed: ${updateError.message}`;
+          } else {
+            dbInserted = true;
+          }
+        }
+      } catch (e) {
+        dbError = `exception: ${(e as Error).message}`;
+      }
+    } else if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      dbError = "missing admin env vars";
+    }
+
     return new Response(
-      JSON.stringify({ message: "Email sent", id: data.id, threadId: data.threadId }),
+      JSON.stringify({ message: "Email sent", id: data.id, threadId: data.threadId, dbInserted, dbError }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

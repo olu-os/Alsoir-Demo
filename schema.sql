@@ -188,3 +188,17 @@ SELECT cron.schedule(
     WHERE created_at < NOW() - INTERVAL '30 days';
   $$
 );
+
+-- pg_cron: daily purge of trashed messages older than 30 days
+SELECT cron.schedule(
+  'purge_trashed_messages',
+  '0 4 * * *',
+  $$
+    DELETE FROM messages
+    WHERE metadata->>'trashed' = 'true'
+    AND (
+      metadata->>'trashed_at' IS NULL
+      OR (metadata->>'trashed_at')::timestamptz < NOW() - INTERVAL '30 days'
+    );
+  $$
+);

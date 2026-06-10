@@ -55,6 +55,7 @@ export interface Message {
   suggestedReply?: string;
   tags: string[];
   threadId?: string;
+  trashedAt?: string;
 }
 
 export interface BusinessPolicy {
@@ -80,7 +81,10 @@ export type AppEventType =
   | 'REPLY_SENT'
   | 'AI_PROVIDER_FALLBACK'
   | 'AI_PROVIDER_ERROR'
-  | 'SYNC_GMAIL';
+  | 'SYNC_GMAIL'
+  | 'MESSAGE_TRASHED'
+  | 'MESSAGE_RESTORED'
+  | 'MESSAGE_PURGED';
 
 export type AppEventStatus = 'success' | 'failed' | 'fallback';
 

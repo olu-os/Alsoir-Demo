@@ -52,6 +52,30 @@
           transform: scale(1);
         }
       }
+      @keyframes scaleIn {
+        0% { opacity: 0; transform: scale(0.95) translateY(-4px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes scaleOut {
+        0% { opacity: 1; transform: scale(1) translateY(0); }
+        100% { opacity: 0; transform: scale(0.95) translateY(-4px); }
+      }
+      @keyframes fadeUp {
+        0% { opacity: 0; transform: translateY(12px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+      .animate-scale-in {
+        animation: scaleIn 0.15s ease-out;
+      }
+      .animate-scale-out {
+        animation: scaleOut 0.12s ease-in forwards;
+      }
+      .animate-fade-up {
+        animation: fadeUp 0.4s ease-out forwards;
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.25s ease-out forwards;
+      }
       .animate-fade-in-out {
         animation: fadeIn 0.5s ease-in, fadeOut 0.5s ease-out 2s forwards;
       }
