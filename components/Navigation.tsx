@@ -10,9 +10,9 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout }) => {
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
-    { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'policies', label: 'Policies', icon: FileText },
     { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
+    { id: 'trash', label: 'Trash', icon: Trash2 },
     ...(import.meta.env.DEV ? [{ id: 'observability', label: 'Observability', icon: ChartNoAxesCombined  }] : []),
   ];
 

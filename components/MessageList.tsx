@@ -1,6 +1,6 @@
 import React from 'react';
 import { Message, MessageCategory, ResponseCost, Channel } from '../types';
-import { Search, Filter, Instagram, Mail, ShoppingBag, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Search, Filter, Instagram, Mail, ShoppingBag, Trash2, SquareCheck } from 'lucide-react';
 import { filterMessagesBySearch, filterMessagesByFeature } from '../services/filterMessages';
 
 interface MessageListProps {
@@ -158,13 +158,21 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
           </h2>
           <div className="flex items-center space-x-1">
             <button
+              onClick={handleBulkTrash}
+              disabled={bulkSelectedIds.size === 0}
+              className="p-2 rounded-md hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+              title="Trash Selected"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+            <button
               onClick={toggleBulkSelectAll}
               className="p-2 rounded-md hover:bg-slate-100 text-slate-500"
               title={bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0 ? 'Deselect All' : 'Select All'}
             >
               {bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0
-                ? <CheckSquare className="w-4 h-4 text-indigo-600" />
-                : <Square className="w-4 h-4" />}
+                    ? <SquareCheck className="w-5 h-5 text-indigo-600" />
+                : <div className="w-5 h-5 rounded border-2 border-slate-300" />}
             </button>
             <button 
               onClick={onManualSync} 
@@ -191,20 +199,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
           </div>
         </div>
 
-        {bulkSelectedIds.size > 0 && (
-          <div className="mb-3 flex items-center space-x-2 p-2 bg-indigo-50 rounded-lg border border-indigo-200">
-            <span className="text-xs font-medium text-indigo-900 flex-1">
-              {bulkSelectedIds.size} selected
-            </span>
-            <button
-              onClick={handleBulkTrash}
-              className="flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Trash</span>
-            </button>
-          </div>
-        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
@@ -294,8 +288,8 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                   onClick={(e) => toggleBulkSelect(msg.id, idx, e)}
                 >
                   {bulkSelectedIds.has(msg.id)
-                    ? <CheckSquare className="w-4 h-4 text-indigo-600" />
-                    : <Square className="w-4 h-4 text-slate-400" />
+                ? <SquareCheck className="w-5 h-5 text-indigo-600" />
+                    : <div className="w-5 h-5 rounded border-2 border-slate-300" />
                   }
                 </div>
                 <div className="flex-1 min-w-0">
