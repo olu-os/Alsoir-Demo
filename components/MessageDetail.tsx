@@ -318,7 +318,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Sent Replies */}
                 {sentRepliesByMessage[message.id]?.map((reply, index) => (
-                    <div key={index} className="mt-6 max-w-3xl animate-fade-up" style={{ animationDelay: `${index * 100}ms` }}>
+                    <div key={index} className="mt-6 max-w-3xl animate-fade-up">
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
@@ -338,7 +338,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Similar Messages Panel */}
                 {similarMessages.length > 0 && (
-                    <div className="mt-6 max-w-3xl animate-fade-up" style={{ animationDelay: '80ms' }}>
+                    <div className="mt-6 max-w-3xl animate-fade-up">
                         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
