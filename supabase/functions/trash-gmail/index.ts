@@ -21,10 +21,10 @@ serve(async (req) => {
   }
 
   try {
-    const { session, messageId, action, userId } = await req.json();
+    const { providerToken, messageId, action, userId } = await req.json();
 
-    if (!session?.provider_token) {
-      return jsonResponse({ error: "Missing provider_token on session" }, 400);
+    if (!providerToken) {
+      return jsonResponse({ error: "Missing providerToken" }, 400);
     }
 
     if (!messageId || !action) {
@@ -41,7 +41,7 @@ serve(async (req) => {
     const res = await fetch(`${GMAIL_MODIFY_URL}/${messageId}/modify`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.provider_token}`,
+        Authorization: `Bearer ${providerToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ addLabelIds, removeLabelIds }),

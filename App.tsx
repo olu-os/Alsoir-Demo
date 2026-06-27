@@ -560,40 +560,6 @@ const App: React.FC = () => {
     }
   }, [currentView, user?.id]);
 
-  const trashMessageInGmail = async (messageId: string) => {
-    if (isDemoUser) return;
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.provider_token) return;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-      await supabase.functions.invoke('trash-gmail', {
-        body: { session, messageId, action: 'trash', userId: user?.id },
-        headers: anonKey
-          ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
-          : undefined,
-      } as any);
-    } catch (e) {
-      console.warn('Failed to sync trash to Gmail:', e);
-    }
-  };
-
-  const restoreMessageInGmail = async (messageId: string) => {
-    if (isDemoUser) return;
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.provider_token) return;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-      await supabase.functions.invoke('trash-gmail', {
-        body: { session, messageId, action: 'restore', userId: user?.id },
-        headers: anonKey
-          ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
-          : undefined,
-      } as any);
-    } catch (e) {
-      console.warn('Failed to sync restore to Gmail:', e);
-    }
-  };
-
   const handleMessageTrashed = async (id: string) => {
     const messageToTrash = messages.find(m => m.id === id);
     if (!messageToTrash) return;
@@ -632,12 +598,12 @@ const App: React.FC = () => {
             trashed_at: new Date().toISOString(),
           },
         })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user?.id);
 
       if (error) throw error;
 
       logEvent('MESSAGE_TRASHED', 'success', { messageId: id });
-      trashMessageInGmail(id);
     } catch (e) {
       console.error('Failed to trash message:', e);
       setMessages(previousMessages);
@@ -667,9 +633,9 @@ const App: React.FC = () => {
         await supabase
           .from('messages')
           .update({ metadata: newMetadata })
-          .eq('id', id);
+          .eq('id', id)
+          .eq('user_id', user?.id);
         logEvent('MESSAGE_RESTORED', 'success', { messageId: id, action: 'undo' });
-        restoreMessageInGmail(id);
       } catch (e) {
         console.error('Failed to undo trash:', e);
       }
@@ -692,12 +658,12 @@ const App: React.FC = () => {
       const { error } = await supabase
         .from('messages')
         .update({ metadata: newMetadata })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user?.id);
 
       if (error) throw error;
 
       logEvent('MESSAGE_RESTORED', 'success', { messageId: id });
-      restoreMessageInGmail(id);
 
       if (user?.id) {
         const { data: restored } = await supabase
@@ -717,31 +683,22 @@ const App: React.FC = () => {
   };
 
   const handlePermanentDelete = async (id: string) => {
+    if (!user?.id) return;
+
     setTrashedMessages(prev => prev.filter(m => m.id !== id));
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select();
 
       if (error) throw error;
 
+      console.log("deleted:", data);
       logEvent('MESSAGE_PURGED', 'success', { messageId: id });
-
-      if (!isDemoUser) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.provider_token) {
-            await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${session.provider_token}` },
-            });
-          }
-        } catch (e) {
-          console.warn('Failed to delete from Gmail:', e);
-        }
-      }
     } catch (e) {
       console.error('Failed to permanently delete message:', e);
       fetchTrashedMessages();
@@ -787,11 +744,11 @@ const App: React.FC = () => {
               trashed_at: new Date().toISOString(),
             },
           })
-          .eq('id', id);
+          .eq('id', id)
+          .eq('user_id', user?.id);
 
         if (error) throw error;
         logEvent('MESSAGE_TRASHED', 'success', { messageId: id, bulk: true });
-        trashMessageInGmail(id);
       } catch (e) {
         console.error(`Failed to trash message ${id}:`, e);
         setMessages(previousMessages);
@@ -818,9 +775,9 @@ const App: React.FC = () => {
         await supabase
           .from('messages')
           .update({ metadata: newMetadata })
-          .eq('id', id);
+          .eq('id', id)
+          .eq('user_id', user?.id);
         logEvent('MESSAGE_RESTORED', 'success', { messageId: id, bulk: true });
-        restoreMessageInGmail(id);
       } catch (e) {
         console.error(`Failed to restore message ${id}:`, e);
       }
@@ -833,34 +790,25 @@ const App: React.FC = () => {
   };
 
   const handleBulkPermanentDelete = async (ids: string[]) => {
+    if (!user?.id) return;
+
     setTrashedMessages(prev => prev.filter(m => !ids.includes(m.id)));
 
     for (const id of ids) {
       try {
-        await supabase.from('messages').delete().eq('id', id);
+        const { data, error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .select();
+
+        if (error) throw error;
+
+        console.log("deleted:", data);
         logEvent('MESSAGE_PURGED', 'success', { messageId: id, bulk: true });
       } catch (e) {
         console.error(`Failed to delete message ${id}:`, e);
-      }
-    }
-
-    if (!isDemoUser) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.provider_token) {
-          for (const id of ids) {
-            try {
-              await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${session.provider_token}` },
-              });
-            } catch (e) {
-              console.warn(`Failed to delete ${id} from Gmail:`, e);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to delete from Gmail:', e);
       }
     }
   };

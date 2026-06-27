@@ -69,6 +69,9 @@ CREATE POLICY "Users can insert their own messages" ON messages
 CREATE POLICY "Users can update their own messages" ON messages
   FOR UPDATE USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can delete their own messages" ON messages
+  FOR DELETE USING (auth.uid() = user_id);
+
 -- Policies for Policies
 CREATE POLICY "Users can only view their own policies" ON policies
   FOR SELECT USING (auth.uid() = user_id);
