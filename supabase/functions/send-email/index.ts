@@ -123,7 +123,12 @@ serve(async (req) => {
         });
 
         if (insertError) {
-          dbError = `insert failed: ${insertError.message}`;
+          // Ignore duplicate constraint violations (idempotency)
+          if (insertError.code === "23505") {
+            dbInserted = true;
+          } else {
+            dbError = `insert failed: ${insertError.message}`;
+          }
         } else {
           const { error: updateError } = await supabaseAdmin.from("messages").update({ is_replied: true }).eq("id", messageId).eq("user_id", userId);
           if (updateError) {

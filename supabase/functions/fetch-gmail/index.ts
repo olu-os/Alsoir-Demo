@@ -170,7 +170,7 @@ type GmailMessage = {
   internalDate?: string;
   labelIds?: unknown;
   snippet?: string;
-  payload?: { headers?: any[] };
+  payload?: { headers?: any[]; body?: { data?: string }; mimeType?: string; parts?: any[] };
 };
 
 type MessageRow = {
@@ -190,7 +190,36 @@ type MessageRow = {
   sentiment?: string;
   predicted_cost?: string;
   tags?: string[];
+  metadata?: Record<string, any>;
 };
+
+function decodeBase64Url(str: string): string {
+  if (!str) return "";
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4) base64 += "=";
+  const bytes = atob(base64);
+  return new TextDecoder("utf-8").decode(
+    Uint8Array.from(bytes, (c) => c.charCodeAt(0))
+  );
+}
+
+function extractBodyFromPayload(payload: any): string {
+  let text = "";
+
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    text = decodeBase64Url(payload.body.data);
+  }
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (!text) {
+        text = extractBodyFromPayload(part);
+      }
+    }
+  }
+
+  return text;
+}
 
 
 const ALLOWED_CATEGORIES = [
@@ -494,6 +523,10 @@ serve(async (req) => {
 
       const { senderName, senderHandle } = parseFromHeader(fromHeader);
 
+      const fullBody = extractBodyFromPayload(email.payload);
+      const snippet = email.snippet || "";
+      const bodyComplete = fullBody.length > 0 && fullBody.length === snippet.length;
+
       const row: MessageRow = {
         id: email.id,
         thread_id: email.threadId,
@@ -503,10 +536,11 @@ serve(async (req) => {
         sender_name: senderName,
         sender_handle: senderHandle,
         subject: subjectHeader,
-        body: email.snippet || "",
+        body: snippet,
         received_at: receivedAtIso,
         is_read: !labelIds.includes("UNREAD"),
         is_replied: false,
+        metadata: bodyComplete ? { body_complete: true } : undefined,
       };
       return row;
     })).filter(Boolean) as MessageRow[];

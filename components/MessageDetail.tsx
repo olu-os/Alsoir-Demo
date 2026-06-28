@@ -5,6 +5,8 @@ import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
 import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X, Trash2 } from 'lucide-react';
 
+const bodyCache = new Map<string, string>();
+
 interface MessageDetailProps {
     message: Message | null;
     allMessages: Message[];
@@ -30,6 +32,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
     const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
+    const [fullBody, setFullBody] = useState<string>('');
+    const [isLoadingBody, setIsLoadingBody] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -89,7 +93,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         return text.replace(regex, '{NAME}');
     };
 
-    // Only reset similarMessages and selectedSimilarIds when switching messages
     useEffect(() => {
         if (message?.id) {
             setReplyTextRaw(drafts[message.id] || '');
@@ -99,6 +102,71 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setIsGenerating(false);
         setSimilarMessages([]);
         setSelectedSimilarIds(new Set());
+        setFullBody('');
+        setIsLoadingBody(false);
+    }, [message?.id]);
+
+    useEffect(() => {
+        if (!message?.id) return;
+        if (message.channel !== 'Email') {
+            setFullBody(message.body);
+            return;
+        }
+
+        // Check cache first
+        const cached = bodyCache.get(message.id);
+        if (cached) {
+            setFullBody(cached);
+            return;
+        }
+
+        // If body is already substantial, likely full email — skip fetch
+        if (message.body.length > 200) {
+            setFullBody(message.body);
+            bodyCache.set(message.id, message.body);
+            return;
+        }
+
+        let cancelled = false;
+        setIsLoadingBody(true);
+
+        (async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.provider_token) {
+                    if (!cancelled) {
+                        setFullBody(message.body);
+                        setIsLoadingBody(false);
+                    }
+                    return;
+                }
+
+                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+                const { data, error } = await supabase.functions.invoke('get-gmail-message', {
+                    body: { providerToken: session.provider_token, messageId: message.id },
+                    headers: anonKey
+                        ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey }
+                        : undefined,
+                } as any);
+
+                if (cancelled) return;
+
+                if (error || !data?.body) {
+                    setFullBody(message.body);
+                } else {
+                    bodyCache.set(message.id, data.body);
+                    setFullBody(data.body);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    setFullBody(message.body);
+                }
+            } finally {
+                if (!cancelled) setIsLoadingBody(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
     }, [message?.id]);
 
     // Update replyText when drafts change, but do not reset similarMessages
@@ -111,7 +179,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const handleGenerateReply = async () => {
         if (!message) return;
         setIsGenerating(true);
-        let draft = await generateDraftReply(message.body, message.senderName, policies, businessName, signature, aiPersonality);
+        const bodyToUse = fullBody || message.body;
+        let draft = await generateDraftReply(bodyToUse, message.senderName, policies, businessName, signature, aiPersonality);
         setReplyTextRaw(draft);
         setDrafts(prev => ({ ...prev, [message.id]: draft }));
         setIsGenerating(false);
@@ -288,7 +357,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
             {/* Message Body */}
             <div key={message.id} className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl animate-fade-up">
+                <div className="bg-white p-6 mx-20 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
@@ -306,7 +375,14 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         )}
                     </div>
                     <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                        {message.body}
+                        {isLoadingBody ? (
+                            <div className="flex items-center space-x-2 text-slate-400">
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Loading message...</span>
+                            </div>
+                        ) : (
+                            fullBody || message.body
+                        )}
                     </div>
 
                     <div className="mt-6 flex flex-wrap gap-2">
@@ -317,8 +393,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 </div>
 
                 {/* Sent Replies */}
-                {sentRepliesByMessage[message.id]?.map((reply, index) => (
-                    <div key={index} className="mt-6 max-w-3xl animate-fade-up">
+                {sentRepliesByMessage[message.id]?.map((reply) => (
+                    <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 mx-20 animate-fade-up">
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
@@ -511,10 +587,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter((m): m is Message => m !== undefined);
                                         // Always substitute {NAME} with the correct senderName for each recipient
                                         const baseDraft = normalizeDraftName(replyTextRaw, message.senderName);
-                                        for (const msg of allMsgs) {
-                                            const personalized = baseDraft.replaceAll('{NAME}', getFirstName(msg.senderName));
-                                            await onReplySent([msg.id], personalized);
-                                        }
                                         setDrafts(prev => {
                                             const newDrafts = { ...prev };
                                             allIds.forEach(id => { delete newDrafts[id]; });
@@ -523,6 +595,10 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         setReplyTextRaw('');
                                         setSimilarMessages([]);
                                         setDraftsGeneratedFor([]);
+                                        for (const msg of allMsgs) {
+                                            const personalized = baseDraft.replaceAll('{NAME}', getFirstName(msg.senderName));
+                                            await onReplySent([msg.id], personalized);
+                                        }
                                     }}
                                     disabled={!replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName)).trim()}
                                     className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"

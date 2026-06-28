@@ -109,7 +109,8 @@ CREATE TABLE IF NOT EXISTS message_replies (
   external_id TEXT, -- e.g., Gmail sent message id
   status TEXT NOT NULL DEFAULT 'queued', -- queued|sent|failed
   error TEXT,
-  sent_at TIMESTAMPTZ DEFAULT NOW()
+  sent_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT message_replies_unique_reply UNIQUE (message_id, user_id, body)
 );
 ALTER TABLE message_replies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own replies" ON message_replies FOR ALL USING (auth.uid() = user_id);
