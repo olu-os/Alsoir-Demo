@@ -5,9 +5,10 @@ interface NavigationProps {
   currentView: string;
   onChangeView: (view: string) => void;
   onLogout: () => void;
+  activeIncidentCount: number;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout }) => {
+const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout, activeIncidentCount }) => {
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'policies', label: 'Policies', icon: FileText },
@@ -38,7 +39,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
               }`}
             >
               <item.icon className="w-6 h-6 flex-shrink-0" />
-              <span className="ml-3 font-medium hidden lg:block">{item.label}</span>
+              <span className="ml-3 font-medium hidden lg:block flex-1 text-left">{item.label}</span>
+              {item.id === 'observability' && activeIncidentCount > 0 && (
+                <span className="hidden lg:inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 ml-2 bg-white text-slate-900 text-xs font-semibold rounded-full">
+                  {activeIncidentCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>

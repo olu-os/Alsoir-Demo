@@ -81,6 +81,7 @@ const App: React.FC = () => {
   const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: Array<{ body: string; sentAt: string }> }>({});
   const [trashedMessages, setTrashedMessages] = useState<Message[]>([]);
   const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+  const [activeIncidentCount, setActiveIncidentCount] = useState(0);
   const [undoToast, setUndoToast] = useState<{
     messageIds: string[];
     messages: Message[];
@@ -190,6 +191,43 @@ const App: React.FC = () => {
       startAnomalyWorker(user.id);
     }
     return () => { stopAnomalyWorker(); };
+  }, [user?.id]);
+
+  // Fetch active (non-resolved) incident count for the nav badge
+  useEffect(() => {
+    if (!user?.id) {
+      setActiveIncidentCount(0);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const { count, error } = await supabase
+        .from('incidents')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .neq('status', 'resolved');
+      if (!cancelled) {
+        if (error) {
+          console.warn('Failed to fetch active incident count:', error.message);
+          setActiveIncidentCount(0);
+        } else {
+          setActiveIncidentCount(count ?? 0);
+        }
+      }
+    };
+    load();
+    const channel = supabase
+      .channel(`public:incidents:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incidents', filter: `user_id=eq.${user.id}` },
+        () => { load(); },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [user?.id]);
 
   // Only fetch messages for demo user, and never call fetch-gmail or Gmail API in demo mode
@@ -963,7 +1001,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} />
+      <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} activeIncidentCount={activeIncidentCount} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Reliability Layer 1: User-visible status — only shows when there's an active incident */}

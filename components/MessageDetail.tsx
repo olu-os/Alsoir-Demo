@@ -29,6 +29,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [isFindingSimilar, setIsFindingSimilar] = useState(false);
     const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
     const [selectedSimilarIds, setSelectedSimilarIds] = useState<Set<string>>(new Set());
+    const [isDismissingSimilar, setIsDismissingSimilar] = useState(false);
     const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
     const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
@@ -37,6 +38,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [isLoadingBody, setIsLoadingBody] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const similarPanelRef = useRef<HTMLDivElement>(null);
 
     const openDropdown = () => {
         if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
@@ -78,7 +80,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         };
     }, []);
 
-    const linkify = (text: string) => {
+    const renderBody = (text: string) => {
         const urlRegex = /(https?:\/\/[^\s]+)/g;
         const parts = text.split(urlRegex);
         return parts.map((part, i) => {
@@ -188,6 +190,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         }
     }, [drafts, message?.id]);
 
+    useEffect(() => {
+        if (similarMessages.length > 0 && similarPanelRef.current) {
+            similarPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, [similarMessages]);
+
     const handleGenerateReply = async () => {
         if (!message) return;
         setIsGenerating(true);
@@ -275,7 +283,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setTimeout(() => setShowTaskToast(false), 3000);
     };
 
-    const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
     const [draftsGeneratedFor, setDraftsGeneratedFor] = useState<string[]>([]);
 
     const handleSend = async () => {
@@ -291,25 +298,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setReplyTextRaw('');
         setSimilarMessages([]);
         setDraftsGeneratedFor([]);
-    };
-
-    const handleGenerateDrafts = async () => {
-        if (!message) return;
-        setIsGeneratingDrafts(true);
-        const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
-        const newDrafts = { ...drafts };
-        for (const id of allIds) {
-            const msg = allMessages.find(m => m.id === id);
-            if (msg) {
-                const draft = await generateDraftReply(msg.body, msg.senderName, policies, businessName, signature, aiPersonality);
-                newDrafts[id] = draft;
-            }
-        }
-        setDrafts(newDrafts);
-        setReplyTextRaw('');
-        setSimilarMessages([]);
-        setIsGeneratingDrafts(false);
-        setDraftsGeneratedFor(allIds);
     };
 
     if (!message) {
@@ -393,7 +381,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 <span>Loading message...</span>
                             </div>
                         ) : (
-                            linkify(fullBody || message.body)
+                            renderBody(fullBody || message.body)
                         )}
                     </div>
 
@@ -418,15 +406,15 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 </div>
                             </div>
                             <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                {linkify(reply.body)}
+                                {renderBody(reply.body)}
                             </div>
                         </div>
                     </div>
                 ))}
 
                 {/* Similar Messages Panel */}
-                {similarMessages.length > 0 && (
-                    <div className="mt-6 max-w-3xl animate-fade-up">
+                {(similarMessages.length > 0 || isDismissingSimilar) && (
+                    <div ref={similarPanelRef} className={`mt-6 mx-20 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
                         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
@@ -476,8 +464,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         <div className="flex justify-end mt-4">
                             <button
                                 onClick={() => {
-                                    setSimilarMessages([]);
+                                    setIsDismissingSimilar(true);
                                     setSelectedSimilarIds(new Set());
+                                    setTimeout(() => {
+                                        setSimilarMessages([]);
+                                        setIsDismissingSimilar(false);
+                                    }, 200);
                                 }}
                                 className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors shadow-sm text-sm font-medium"
                             >
