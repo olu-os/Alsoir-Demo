@@ -48,7 +48,6 @@ const normalizeDbMessageRow = (row: any): Message => ({
   tags: Array.isArray(row.tags) ? row.tags : [],
   threadId: row.thread_id ?? undefined,
   trashedAt: row.metadata?.trashed_at ?? undefined,
-  metadata: row.metadata ?? undefined,
 });
 
 // Demo user email constant

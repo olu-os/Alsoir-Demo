@@ -32,6 +32,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
     const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
+    const [isSending, setIsSending] = useState(false);
     const [fullBody, setFullBody] = useState<string>('');
     const [isLoadingBody, setIsLoadingBody] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,6 +77,17 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
         };
     }, []);
+
+    const linkify = (text: string) => {
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const parts = text.split(urlRegex);
+        return parts.map((part, i) => {
+            if (urlRegex.test(part)) {
+                return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">{part}</a>;
+            }
+            return part;
+        });
+    };
 
     const getFirstName = (fullName?: string) => {
         const senderName = (fullName || '').trim();
@@ -381,7 +393,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 <span>Loading message...</span>
                             </div>
                         ) : (
-                            fullBody || message.body
+                            linkify(fullBody || message.body)
                         )}
                     </div>
 
@@ -406,7 +418,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 </div>
                             </div>
                             <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                {reply.body}
+                                {linkify(reply.body)}
                             </div>
                         </div>
                     </div>
@@ -524,29 +536,36 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     </div>
 
                     <div className="relative">
-                        <textarea
-                            value={replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName))}
-                            onChange={(e) => {
-                                // When user edits, update raw draft with {NAME}
-                                let val = e.target.value;
-                                if (message?.senderName) {
-                                    // Replace senderName with {NAME}
-                                    val = normalizeDraftName(val, message.senderName);
-                                }
-                                setReplyTextRaw(val);
-                                if (message?.id) {
-                                    setDrafts(prev => ({ ...prev, [message.id]: val }));
-                                }
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSend();
-                                }
-                            }}
-                            placeholder="Type your reply here..."
-                            className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
-                        />
+                        {isSending ? (
+                            <div className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm leading-relaxed text-slate-700 flex space-x-2">
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Sending...</span>
+                            </div>
+                        ) : (
+                            <textarea
+                                value={replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName))}
+                                onChange={(e) => {
+                                    // When user edits, update raw draft with {NAME}
+                                    let val = e.target.value;
+                                    if (message?.senderName) {
+                                        // Replace senderName with {NAME}
+                                        val = normalizeDraftName(val, message.senderName);
+                                    }
+                                    setReplyTextRaw(val);
+                                    if (message?.id) {
+                                        setDrafts(prev => ({ ...prev, [message.id]: val }));
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSend();
+                                    }
+                                }}
+                                placeholder="Type your reply here..."
+                                className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
+                            />
+                        )}
                         <div className="absolute bottom-3 left-3 flex items-center space-x-2">
                             <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
                                 <Paperclip className="w-4 h-4" />
@@ -595,9 +614,14 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         setReplyTextRaw('');
                                         setSimilarMessages([]);
                                         setDraftsGeneratedFor([]);
-                                        for (const msg of allMsgs) {
-                                            const personalized = baseDraft.replaceAll('{NAME}', getFirstName(msg.senderName));
-                                            await onReplySent([msg.id], personalized);
+                                        setIsSending(true);
+                                        try {
+                                            for (const msg of allMsgs) {
+                                                const personalized = baseDraft.replaceAll('{NAME}', getFirstName(msg.senderName));
+                                                await onReplySent([msg.id], personalized);
+                                            }
+                                        } finally {
+                                            setIsSending(false);
                                         }
                                     }}
                                     disabled={!replyTextRaw.replaceAll('{NAME}', getFirstName(message?.senderName)).trim()}

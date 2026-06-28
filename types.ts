@@ -56,7 +56,6 @@ export interface Message {
   tags: string[];
   threadId?: string;
   trashedAt?: string;
-  metadata?: Record<string, any>;
 }
 
 export interface BusinessPolicy {
