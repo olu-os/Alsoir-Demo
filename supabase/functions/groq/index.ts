@@ -1,9 +1,14 @@
+import { rateLimitOrResponse } from "../_shared/rateLimit.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 // Supabase Edge Function for Groq-powered features
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
 const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
@@ -65,7 +70,11 @@ serve(async (req) => {
   }
   try {
     if (pathname.endsWith("/find-similar")) {
-      const { target, candidates } = await req.json();
+      const { target, candidates, userId } = await req.json();
+      if (userId) {
+        const limited = await rateLimitOrResponse("groq:find-similar", userId, RATE_LIMIT, RATE_WINDOW_MS);
+        if (limited) return limited;
+      }
       const limited = (candidates || []).slice(0, 25).map((m) => ({ id: m.id, body: (m.body || '').slice(0, 200) }));
       const prompt = [
         'You are an expert customer support AI. Compare the target message to each candidate and decide if they are about the SAME issue.',
@@ -87,7 +96,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ similarIds: parsed.similarIds || [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/categorize")) {
-      const { text } = await req.json();
+      const { text, userId } = await req.json();
+      if (userId) {
+        const limited = await rateLimitOrResponse("groq:categorize", userId, RATE_LIMIT, RATE_WINDOW_MS);
+        if (limited) return limited;
+      }
       const prompt = [
         'You are a customer support AI that classifies messages.',
         'Categorize the following customer message into one of these categories: Shipping, Returns, Product, Custom, Complaint, General, Other.',
@@ -113,7 +126,11 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/generate-draft")) {
-      const { messageText, senderName, policies, businessName, signature, aiPersonality } = await req.json();
+      const { messageText, senderName, policies, businessName, signature, aiPersonality, userId } = await req.json();
+      if (userId) {
+        const limited = await rateLimitOrResponse("groq:generate-draft", userId, RATE_LIMIT, RATE_WINDOW_MS);
+        if (limited) return limited;
+      }
       const policyContext = (policies || []).map((p) => `${p.title}: ${p.content}`).join('\n\n').slice(0, 6000);
       const personalityPrompt = (() => {
         switch (aiPersonality) {
@@ -140,7 +157,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ draft: content.trim() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (pathname.endsWith("/analyze-incident")) {
-      const { prompt, system_prompt } = await req.json();
+      const { prompt, system_prompt, userId } = await req.json();
+      if (userId) {
+        const limited = await rateLimitOrResponse("groq:analyze-incident", userId, RATE_LIMIT, RATE_WINDOW_MS);
+        if (limited) return limited;
+      }
       const messages = [
         { role: 'system', content: system_prompt || 'You are an expert SRE incident analyst. Return only JSON.' },
         { role: 'user', content: prompt },

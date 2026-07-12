@@ -11,6 +11,11 @@ const LLM_PROVIDER = process.env.LLM_PROVIDER || env.VITE_LLM_PROVIDER || env.LL
 const OLLAMA_BASE_URL = ((import.meta as any).env?.VITE_OLLAMA_BASE_URL as string | undefined) || 'http://localhost:11434';
 const OLLAMA_CHAT_MODEL = ((import.meta as any).env?.VITE_OLLAMA_CHAT_MODEL as string | undefined) || 'gpt-oss:120b-cloud';
 
+async function getCurrentUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
+
 let cachedOllamaModel: string | null = null;
 const getOllamaChatModel = async (): Promise<string> => {
   if (cachedOllamaModel) return cachedOllamaModel;
@@ -44,11 +49,16 @@ const getOllamaChatModel = async (): Promise<string> => {
 
 const SUPABASE_FUNCTIONS_URL = env.VITE_SUPABASE_FUNCTIONS_URL || '';
 const findSimilarWithGroq = async (target: Message, candidates: Message[]): Promise<string[]> => {
+  const userId = await getCurrentUserId();
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/find-similar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target, candidates }),
+    body: JSON.stringify({ target, candidates, userId }),
   });
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw Object.assign(new Error('Rate limit exceeded'), { status: 429, retryAfter: data.retryAfter });
+  }
   if (!response.ok) throw new Error('Groq backend API error');
   const data = await response.json();
   if (!Array.isArray(data.similarIds)) throw new Error('Groq backend API invalid response');
@@ -124,11 +134,16 @@ const ALLOWED_CATEGORIES = [
 ];
 
 async function categorizeWithGroq(text: string): Promise<AnalysisResult | null> {
+  const userId = await getCurrentUserId();
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/categorize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, userId }),
   });
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw Object.assign(new Error('Rate limit exceeded'), { status: 429, retryAfter: data.retryAfter });
+  }
   if (!response.ok) return null;
   const data = await response.json();
   if (!data || typeof data.category !== 'string') return null;
@@ -195,12 +210,21 @@ async function categorizeWithOllama(text: string): Promise<AnalysisResult | null
 export const analyzeMessageContent = async (text: string): Promise<AnalysisResult> => {
   const start = Date.now();
   if (LLM_PROVIDER === 'groq') {
-    const groqResult = await categorizeWithGroq(text);
-    if (groqResult) {
-      logEvent('AI_CLASSIFICATION', 'success', { provider: 'groq' }, Date.now() - start);
-      return groqResult;
+    try {
+      const groqResult = await categorizeWithGroq(text);
+      if (groqResult) {
+        logEvent('AI_CLASSIFICATION', 'success', { provider: 'groq' }, Date.now() - start);
+        return groqResult;
+      }
+      logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'categorize' }, Date.now() - start);
+    } catch (e: any) {
+      const payload: Record<string, unknown> = { from: 'groq', to: 'ollama', operation: 'categorize' };
+      if (e?.status === 429) {
+        payload.status = 429;
+        payload.retryAfter = e.retryAfter;
+      }
+      logEvent('AI_PROVIDER_FALLBACK', 'fallback', payload, Date.now() - start);
     }
-    logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'categorize' }, Date.now() - start);
   }
 
   const ollamaResult = await categorizeWithOllama(text);
@@ -226,6 +250,7 @@ export const generateDraftWithGroq = async (
   signature: string,
   aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string | null> => {
+  const userId = await getCurrentUserId();
   const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/generate-draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -236,9 +261,14 @@ export const generateDraftWithGroq = async (
       businessName,
       signature,
       aiPersonality,
-      aiDraftInstructions: 'Always use {NAME} as a variable for the customer’s name, never the full name. Do not use the customer’s full name in the reply.'
+      aiDraftInstructions: 'Always use {NAME} as a variable for the customer\'s name, never the full name. Do not use the customer\'s full name in the reply.',
+      userId,
     }),
   });
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw Object.assign(new Error('Rate limit exceeded'), { status: 429, retryAfter: data.retryAfter });
+  }
   if (!response.ok) return null;
   const data = await response.json();
   if (!data || typeof data.draft !== 'string') return null;
@@ -318,22 +348,32 @@ export const generateDraftReply = async (
   signature: string,
   aiPersonality: 'support' | 'rapper' | 'medieval'
 ): Promise<string> => {
+  
   const start = Date.now();
   let draft: string | null = null;
   if (LLM_PROVIDER === 'groq') {
-    draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature, aiPersonality);
-    if (draft) {
-      logEvent('AI_DRAFT_GENERATED', 'success', { provider: 'groq', personality: aiPersonality }, Date.now() - start);
-      return draft;
+    try {
+      draft = await generateDraftWithGroq(messageText, senderName, policies, businessName, signature, aiPersonality);
+      if (draft) {
+        logEvent('AI_DRAFT_GENERATED', 'success', { provider: 'groq', personality: aiPersonality }, Date.now() - start);
+        return draft;
+      }
+      logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'generate-draft' }, Date.now() - start);
+    } catch (e: any) {
+      const payload: Record<string, unknown> = { from: 'groq', to: 'ollama', operation: 'generate-draft' };
+      if (e?.status === 429) {
+        payload.status = 429;
+        payload.retryAfter = e.retryAfter;
+      }
+      logEvent('AI_PROVIDER_FALLBACK', 'fallback', payload, Date.now() - start);
     }
-    logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'generate-draft' }, Date.now() - start);
   }
   draft = await generateDraftWithOllama(messageText, senderName, policies, businessName, signature, aiPersonality);
   if (draft) {
     logEvent('AI_DRAFT_GENERATED', 'success', { provider: 'ollama', personality: aiPersonality }, Date.now() - start);
     return draft;
   }
-  // Template fallback
+  // Fallback
   logEvent('AI_DRAFT_GENERATED', 'fallback', { provider: 'template', reason: 'all_providers_failed' }, Date.now() - start);
   return (
     `Hi ${senderName || 'there'},\n\n` +
@@ -417,8 +457,13 @@ export const findSimilarMessages = async (
       try {
         computedIds = await findSimilarWithGroq(target, potentialMatches);
         logEvent('FIND_SIMILAR', 'success', { provider: 'groq', matchCount: computedIds.length, cachedCount: cachedSimilar.length }, Date.now() - start);
-      } catch (groqError) {
-        logEvent('AI_PROVIDER_FALLBACK', 'fallback', { from: 'groq', to: 'ollama', operation: 'find-similar' }, Date.now() - start);
+      } catch (groqError: any) {
+        const payload: Record<string, unknown> = { from: 'groq', to: 'ollama', operation: 'find-similar' };
+        if (groqError?.status === 429) {
+          payload.status = 429;
+          payload.retryAfter = groqError.retryAfter;
+        }
+        logEvent('AI_PROVIDER_FALLBACK', 'fallback', payload, Date.now() - start);
         throw groqError;
       }
     } else {

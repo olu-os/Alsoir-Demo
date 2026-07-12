@@ -97,10 +97,12 @@ const parseIncidentJson = (content: string): GroqIncidentResponse | null => {
 
 async function callGroqIncidentAnalysis(events: AppEvent[], flags: string[]): Promise<GroqIncidentResponse | null> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
     const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/groq/analyze-incident`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ events, flags }),
+      body: JSON.stringify({ events, flags, userId }),
     });
     if (!response.ok) return null;
     const data = await response.json();

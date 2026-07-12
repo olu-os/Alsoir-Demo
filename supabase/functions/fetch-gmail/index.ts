@@ -112,8 +112,12 @@ type AnalysisResult = {
 };
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { rateLimitOrResponse } from "../_shared/rateLimit.ts";
 
 const GMAIL_API_URL = "https://www.googleapis.com/gmail/v1/users/me/messages";
+
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 30_000;
 
 const DEFAULT_MAX_RESULTS = 30;
 
@@ -410,6 +414,9 @@ serve(async (req) => {
       console.error("Session missing user.id");
       return jsonResponse({ error: "Missing session.user.id" }, 400);
     }
+
+    const limited = await rateLimitOrResponse("fetch-gmail", userId, RATE_LIMIT, RATE_WINDOW_MS);
+    if (limited) return limited;
 
     // Exclude outbound messages; ingest inbound customer email.
     // Additionally, constrain results to likely business/support/order emails.

@@ -182,6 +182,24 @@ CREATE POLICY "Users manage own similarity_cache" ON similarity_cache
 CREATE INDEX IF NOT EXISTS similarity_cache_message_a_idx ON similarity_cache(message_a_id);
 CREATE INDEX IF NOT EXISTS similarity_cache_message_b_idx ON similarity_cache(message_b_id);
 
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  key TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS rate_limits_key_user_idx ON rate_limits(key, user_id, created_at DESC);
+
+SELECT cron.schedule(
+  'cleanup_rate_limits',
+  '*/10 * * * *',
+  $$
+    DELETE FROM rate_limits
+    WHERE created_at < NOW() - INTERVAL '2 hours';
+  $$
+);
+
 -- pg_cron: daily cleanup of stale similarity cache entries (older than 30 days)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 SELECT cron.schedule(
