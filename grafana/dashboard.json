@@ -1,0 +1,531 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "AI Operations",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "req/s",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "success" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "fallback" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "failed" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "AI Operations by Status",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  status,\n  COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND type IN ('AI_CLASSIFICATION', 'AI_DRAFT_GENERATED', 'FIND_SIMILAR')\nGROUP BY time, status\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "req/s",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "AI Operations by Type",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  type,\n  COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND type IN ('AI_CLASSIFICATION', 'AI_DRAFT_GENERATED', 'FIND_SIMILAR', 'SYNC_GMAIL', 'REPLY_SENT')\nGROUP BY time, type\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "ms",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "p99" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "AI Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms) AS p50,\n  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95,\n  PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) AS p99\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND latency_ms IS NOT NULL\n  AND type IN ('AI_CLASSIFICATION', 'AI_DRAFT_GENERATED', 'FIND_SIMILAR')\nGROUP BY time\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "req/s",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "fallback" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Fallbacks & Errors",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  CASE WHEN type = 'AI_PROVIDER_FALLBACK' THEN 'fallback' ELSE 'failed' END AS category,\n  COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND type IN ('AI_PROVIDER_FALLBACK', 'AI_PROVIDER_ERROR')\nGROUP BY time, category\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 17 },
+      "id": 5,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Fallbacks (24h)",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= NOW() - INTERVAL '24 hours'\n  AND type = 'AI_PROVIDER_FALLBACK'",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 17 },
+      "id": 6,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Errors (24h)",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= NOW() - INTERVAL '24 hours'\n  AND type = 'AI_PROVIDER_ERROR'",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2000 },
+              { "color": "red", "value": 5000 }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 17 },
+      "id": 7,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Avg Latency (24h)",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT ROUND(AVG(latency_ms)) AS avg_ms\nFROM app_events\nWHERE\n  created_at >= NOW() - INTERVAL '24 hours'\n  AND latency_ms IS NOT NULL",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 50 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 17 },
+      "id": 8,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Total Operations (24h)",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= NOW() - INTERVAL '24 hours'\n  AND type IN ('AI_CLASSIFICATION', 'AI_DRAFT_GENERATED', 'FIND_SIMILAR')",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "id": 101,
+      "title": "Gmail Sync & Replies",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "req/s",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "id": 9,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Gmail Sync Operations",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  status,\n  COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND type = 'SYNC_GMAIL'\nGROUP BY time, status\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "req/s",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "id": 10,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Replies Sent",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  status,\n  COUNT(*) AS count\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\n  AND type = 'REPLY_SENT'\nGROUP BY time, status\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 102,
+      "title": "Incidents",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 31 },
+      "id": 11,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Open Incidents",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS count\nFROM incidents\nWHERE status = 'open'",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 50, "lineWidth": 0 },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "critical" }, "properties": [{ "id": "color", "value": { "fixedColor": "dark-red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "high" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "medium" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "low" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 31 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Incidents by Severity",
+      "type": "piechart",
+      "targets": [
+        {
+          "rawSql": "SELECT severity, COUNT(*) AS count\nFROM incidents\nWHERE status = 'open'\nGROUP BY severity\nORDER BY count DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "count",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 31 },
+      "id": 13,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Incidents Over Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  severity,\n  COUNT(*) AS count\nFROM incidents\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\nGROUP BY time, severity\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 103,
+      "title": "Rate Limiting",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "requests",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 37 },
+      "id": 14,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Rate Limit Hits by Endpoint",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  $__timeGroup(created_at, '$__interval') AS time,\n  key,\n  COUNT(*) AS hits\nFROM rate_limits\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\nGROUP BY time, key\nORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 37 },
+      "id": 15,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Rate Limit Rows (total)",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS count\nFROM rate_limits",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "id": 104,
+      "title": "Event Log",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "id": 16,
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "title": "Recent Events",
+      "type": "table",
+      "targets": [
+        {
+          "rawSql": "SELECT\n  created_at AS time,\n  type,\n  status,\n  latency_ms,\n  error,\n  payload\nFROM app_events\nWHERE\n  created_at >= $__timeFrom()\n  AND created_at <= $__timeTo()\nORDER BY created_at DESC\nLIMIT 200",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["alsoir", "sre", "ai"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "PostgreSQL", "value": "PostgreSQL" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "DS_POSTGRESQL",
+        "options": [],
+        "query": "postgres",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Alsoir SRE Dashboard",
+  "uid": "alsoir-sre",
+  "version": 1
+}

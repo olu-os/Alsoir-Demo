@@ -14,3 +14,4 @@ AGENTS.md
 DeploymentGuide.md
 supabase/functions/.env
 supabase/functions/fetch-gmail/.env
+grafana/README.md
