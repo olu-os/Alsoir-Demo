@@ -140,8 +140,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             return;
         }
 
-        // If body is already substantial, likely full email — skip fetch
-        if (message.body.length > 200) {
+        // If full body already fetched, skip Gmail API
+        if (message.fullBodyFetched) {
             setFullBody(message.body);
             bodyCache.set(message.id, message.body);
             return;
@@ -176,6 +176,9 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 } else {
                     bodyCache.set(message.id, data.body);
                     setFullBody(data.body);
+                    (async () => {
+                        await supabase.from('messages').update({ body: data.body, full_body_fetched: true }).eq('id', message.id);
+                    })();
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -202,11 +205,29 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         }
     }, [similarMessages]);
 
+    const replyCountRef = useRef(0);
+
+    // Reset count when switching messages so we don't compare across different conversations
     useEffect(() => {
-        if (repliesEndRef.current) {
+        if (!message?.id) return;
+        replyCountRef.current = (sentRepliesByMessage[message.id] || []).length;
+    }, [message?.id]);
+
+    // Only scroll when a new reply is added to the current message
+    useEffect(() => {
+        if (!message?.id) return;
+        const currentCount = (sentRepliesByMessage[message.id] || []).length;
+        if (currentCount > replyCountRef.current) {
+            repliesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        replyCountRef.current = currentCount;
+    }, [sentRepliesByMessage]);
+
+    useEffect(() => {
+        if (pendingConfirm && repliesEndRef.current) {
             repliesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
-    }, [sentRepliesByMessage, pendingConfirm]);
+    }, [pendingConfirm]);
 
     const handleGenerateReply = async () => {
         if (!message) return;
@@ -243,6 +264,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         channel: m.channel,
                         subject: decodeHtmlEntities(m.subject) || undefined,
                         body: decodeHtmlEntities(m.body),
+                        fullBodyFetched: !!m.full_body_fetched,
                         timestamp: new Date(m.received_at ?? Date.now()),
                         isRead: !!m.is_read,
                         isReplied: !!m.is_replied,
@@ -319,7 +341,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
     const handleConfirmSend = () => {
         if (!message || !pendingConfirm) return;
-        onReplySent([message.id], pendingConfirm);
+        const personalized = replyTextRaw.replaceAll('{NAME}', getFirstName(message.senderName));
+        onReplySent([message.id], personalized);
         setPendingConfirm(null);
         setPendingConfirmBulkCount(0);
         setDrafts(prev => {

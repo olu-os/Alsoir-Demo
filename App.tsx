@@ -38,6 +38,7 @@ const normalizeDbMessageRow = (row: any): Message => ({
   channel: row.channel,
   subject: subjectFallback(row.subject, row.body),
   body: decodeHtmlEntities(row.body),
+  fullBodyFetched: !!row.full_body_fetched,
   timestamp: new Date(row.received_at),
   isRead: !!row.is_read,
   isReplied: !!row.is_replied,

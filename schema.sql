@@ -9,6 +9,7 @@ CREATE TABLE messages (
   channel TEXT NOT NULL DEFAULT 'Email',
   subject TEXT,
   body TEXT,
+  full_body_fetched BOOLEAN DEFAULT FALSE,
   received_at TIMESTAMPTZ DEFAULT NOW(),
   is_read BOOLEAN DEFAULT FALSE,
   is_replied BOOLEAN DEFAULT FALSE,

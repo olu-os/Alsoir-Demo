@@ -39,9 +39,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
               }`}
             >
               <item.icon className="w-6 h-6 flex-shrink-0" />
-              <span className="ml-3 font-medium hidden lg:block flex-1 text-left">{item.label}</span>
+              <span className="ml-3 font-medium hidden lg:block flex-2 text-left">{item.label}</span>
               {item.id === 'observability' && activeIncidentCount > 0 && (
-                <span className="hidden lg:inline-flex items-center justify-center w-6 h-6 ml-2 bg-indigo-600 text-white-900 text-xs font-semibold rounded-full">
+                <span className="hidden lg:inline-flex items-center justify-center w-6 h-6 ml-3 bg-indigo-600 text-white-900 text-xs font-semibold rounded-full">
                   {activeIncidentCount}
                 </span>
               )}

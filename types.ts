@@ -47,6 +47,7 @@ export interface Message {
   channel: Channel;
   subject?: string;
   body: string;
+  fullBodyFetched?: boolean;
   timestamp: Date;
   isRead: boolean;
   isReplied: boolean;
