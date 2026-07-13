@@ -7,6 +7,7 @@ export interface AppSettings {
   businessName: string;
   signature: string;
   autoSendAIResponses: boolean;
+  confirmBeforeSend: boolean;
   bulkReplyMode: 'autoSend' | 'draft';
   aiPersonality: 'support' | 'rapper' | 'medieval';
 }

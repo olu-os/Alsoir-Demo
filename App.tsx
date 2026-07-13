@@ -68,12 +68,14 @@ const App: React.FC = () => {
     businessName: string;
     signature: string;
     autoSendAIResponses: boolean;
+    confirmBeforeSend: boolean;
     bulkReplyMode: 'draft' | 'autoSend';
     aiPersonality: 'support' | 'rapper' | 'medieval';
   }>({
     businessName: '',
     signature: '',
     autoSendAIResponses: false,
+    confirmBeforeSend: false,
     bulkReplyMode: 'draft',
     aiPersonality: 'support'
   });
@@ -1057,6 +1059,7 @@ const App: React.FC = () => {
                   aiPersonality={settings.aiPersonality}
                   onUpdateAiPersonality={handleUpdateAiPersonality}
                   bulkReplyMode={settings.bulkReplyMode}
+                  confirmBeforeSend={settings.confirmBeforeSend}
                    sentRepliesByMessage={sentRepliesByMessage}
                   onMessageTrashed={handleMessageTrashed}
                 />

@@ -3,7 +3,7 @@ import { Message, BusinessPolicy, ResponseCost } from '../types';
 import { generateDraftReply, findSimilarMessages } from '../services/AIMessageService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
-import { Send, Sparkles, RefreshCw, Paperclip, MoreHorizontal, Forward, Users, Check, X, Trash2 } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, MoreHorizontal, Forward, Users, Check, X, Trash2, Clock } from 'lucide-react';
 
 const bodyCache = new Map<string, string>();
 
@@ -19,11 +19,12 @@ interface MessageDetailProps {
     aiPersonality: 'support' | 'rapper' | 'medieval';
     onUpdateAiPersonality: (value: 'support' | 'rapper' | 'medieval') => void;
     bulkReplyMode?: 'autoSend' | 'draft';
+    confirmBeforeSend?: boolean;
     sentRepliesByMessage: { [messageId: string]: Array<{ body: string; sentAt: string }> };
     onMessageTrashed?: (messageId: string) => void;
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, sentRepliesByMessage, onMessageTrashed }) => {
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, confirmBeforeSend, sentRepliesByMessage, onMessageTrashed }) => {
     const [replyTextRaw, setReplyTextRaw] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isFindingSimilar, setIsFindingSimilar] = useState(false);
@@ -34,11 +35,14 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
     const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
     const [isSending, setIsSending] = useState(false);
+    const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+    const [pendingConfirmBulkCount, setPendingConfirmBulkCount] = useState(0);
     const [fullBody, setFullBody] = useState<string>('');
     const [isLoadingBody, setIsLoadingBody] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const similarPanelRef = useRef<HTMLDivElement>(null);
+    const repliesEndRef = useRef<HTMLDivElement>(null);
 
     const openDropdown = () => {
         if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
@@ -118,6 +122,8 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setSelectedSimilarIds(new Set());
         setFullBody('');
         setIsLoadingBody(false);
+        setPendingConfirm(null);
+        setPendingConfirmBulkCount(0);
     }, [message?.id]);
 
     useEffect(() => {
@@ -195,6 +201,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             similarPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }, [similarMessages]);
+
+    useEffect(() => {
+        if (repliesEndRef.current) {
+            repliesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }, [sentRepliesByMessage, pendingConfirm]);
 
     const handleGenerateReply = async () => {
         if (!message) return;
@@ -289,6 +301,11 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         if (!message) return;
         const baseDraft = normalizeDraftName(replyTextRaw, message.senderName);
         const personalized = baseDraft.replaceAll('{NAME}', getFirstName(message.senderName));
+        if (confirmBeforeSend) {
+            setPendingConfirm(personalized);
+            setPendingConfirmBulkCount(0);
+            return;
+        }
         onReplySent([message.id], personalized);
         setDrafts(prev => {
             const newDrafts = { ...prev };
@@ -299,6 +316,36 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         setSimilarMessages([]);
         setDraftsGeneratedFor([]);
     };
+
+    const handleConfirmSend = () => {
+        if (!message || !pendingConfirm) return;
+        onReplySent([message.id], pendingConfirm);
+        setPendingConfirm(null);
+        setPendingConfirmBulkCount(0);
+        setDrafts(prev => {
+            const newDrafts = { ...prev };
+            delete newDrafts[message.id];
+            return newDrafts;
+        });
+        setReplyTextRaw('');
+        setSimilarMessages([]);
+        setDraftsGeneratedFor([]);
+    };
+
+    const handleCancelConfirm = () => {
+        setPendingConfirm(null);
+        setPendingConfirmBulkCount(0);
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && pendingConfirm) {
+                handleCancelConfirm();
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [pendingConfirm]);
 
     if (!message) {
         return (
@@ -411,6 +458,49 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         </div>
                     </div>
                 ))}
+
+                {/* Pending Confirmation */}
+                {pendingConfirm && (
+                    <div className="mt-6 mx-20 animate-fade-up">
+                        <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed border-indigo-300 shadow-sm">
+                            <div className="flex items-center space-x-3 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
+                                    <Clock className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="font-medium text-slate-900">
+                                        {pendingConfirmBulkCount > 0
+                                            ? `Pending Confirmation — ${pendingConfirmBulkCount + 1} recipients`
+                                            : 'Pending Confirmation'
+                                        }
+                                    </div>
+                                    <div className="text-xs text-slate-500">Awaiting your confirmation</div>
+                                </div>
+                            </div>
+                            <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
+                                {pendingConfirm.replaceAll('{NAME}', getFirstName(message?.senderName))}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={handleConfirmSend}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm font-medium"
+                                >
+                                    <Check className="w-4 h-4" />
+                                    <span>{pendingConfirmBulkCount > 0 ? `Confirm Send to ${pendingConfirmBulkCount + 1}` : 'Confirm Send'}</span>
+                                </button>
+                                <button
+                                    onClick={handleCancelConfirm}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+                                >
+                                    <X className="w-4 h-4" />
+                                    <span>Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div ref={repliesEndRef} />
 
                 {/* Similar Messages Panel */}
                 {(similarMessages.length > 0 || isDismissingSimilar) && (
@@ -558,13 +648,9 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
                             />
                         )}
-                        <div className="absolute bottom-3 left-3 flex items-center space-x-2">
-                            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
-                                <Paperclip className="w-4 h-4" />
-                            </button>
-                        </div>
+
                         <div className="absolute bottom-3 right-3">
-                            {bulkReplyMode === 'draft' && selectedSimilarIds.size > 0 ? (
+                            {pendingConfirm ? null : bulkReplyMode === 'draft' && selectedSimilarIds.size > 0 ? (
                                 <button
                                     onClick={async () => {
                                         if (!message) return;
@@ -594,10 +680,14 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                     onClick={async () => {
                                         if (!message) return;
                                         const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
-                                        // Find all involved messages
                                         const allMsgs = allIds.map(id => allMessages.find(m => m.id === id)).filter((m): m is Message => m !== undefined);
-                                        // Always substitute {NAME} with the correct senderName for each recipient
                                         const baseDraft = normalizeDraftName(replyTextRaw, message.senderName);
+                                        const bulkCount = allMsgs.length - 1;
+                                        if (confirmBeforeSend) {
+                                            setPendingConfirm(baseDraft);
+                                            setPendingConfirmBulkCount(bulkCount);
+                                            return;
+                                        }
                                         setDrafts(prev => {
                                             const newDrafts = { ...prev };
                                             allIds.forEach(id => { delete newDrafts[id]; });
@@ -632,7 +722,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     </div>
 
                     <div className="mt-2 text-xs text-slate-400 flex justify-between">
-                        <span>Press Enter to send, Shift + Enter for new line</span>
+                        <span>
+                            {pendingConfirm
+                                ? 'Press Enter to confirm, Esc to cancel'
+                                : 'Press Enter to send, Shift + Enter for new line'
+                            }
+                        </span>
                         {(() => {
                             const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
                             const allDraftsExist = allIds.every(id => drafts[id]);
