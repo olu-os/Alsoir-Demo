@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import Navigation from './components/Navigation';
 import MessageList from './components/MessageList';
 import MessageDetail from './components/MessageDetail';
-import Analytics from './components/Analytics';
+
 import PolicySettings from './components/PolicySettings';
 import SettingsPage from './components/SettingsPage';
 import SignIn from './components/SignIn';
@@ -18,6 +18,7 @@ import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
 import { logEvent } from './services/telemetry';
 import { Undo2 } from 'lucide-react';
+
 
 
 const subjectFallback = (subject: unknown, body: unknown): string | undefined => {
@@ -1104,10 +1105,6 @@ const App: React.FC = () => {
           </>
         )}
 
-        {currentView === 'analytics' && (
-            <Analytics messages={messages} />
-        )}
-
         {currentView === 'trash' && (
             <TrashFolder
               trashedMessages={trashedMessages}
@@ -1132,7 +1129,7 @@ const App: React.FC = () => {
         </div>
 
         {undoToast && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-4 animate-bounce-in z-50">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-4 animate-bounce-in z-50">
             <span className="text-sm font-medium">
               {undoToast.messageIds.length === 1
                 ? 'Message moved to trash'

@@ -497,13 +497,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                             : 'Pending Confirmation'
                                         }
                                     </div>
-                                    <div className="text-xs text-slate-500">Awaiting your confirmation</div>
                                 </div>
                             </div>
-                            <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
+                            <div className="prose prose-sm ml-2 text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
                                 {pendingConfirm.replaceAll('{NAME}', getFirstName(message?.senderName))}
                             </div>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex ml-1 items-center space-x-2">
                                 <button
                                     onClick={handleConfirmSend}
                                     className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm font-medium"

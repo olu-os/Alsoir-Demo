@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Inbox, FileText, Settings, Sparkles, LogOut, ShieldAlert, ChartNoAxesCombined, Trash2  } from 'lucide-react';
+import { Inbox, FileText, Settings, Sparkles, LogOut, ShieldAlert, ChartNoAxesCombined, Trash2  } from 'lucide-react';
 
 interface NavigationProps {
   currentView: string;
@@ -12,7 +12,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'policies', label: 'Policies', icon: FileText },
-    { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
     { id: 'trash', label: 'Trash', icon: Trash2 },
     ...(import.meta.env.DEV ? [{ id: 'observability', label: 'Observability', icon: ChartNoAxesCombined  }] : []),
   ];
