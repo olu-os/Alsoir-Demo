@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own profile" ON profiles FOR ALL USING (auth.uid() = user_id);
 
+-- User Settings (persisted per user)
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  settings JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own settings" ON user_settings FOR ALL USING (auth.uid() = user_id);
+
 -- Message Replies (outbound replies tracked by app)
 CREATE TABLE IF NOT EXISTS message_replies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

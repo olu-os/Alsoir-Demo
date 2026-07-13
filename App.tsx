@@ -64,21 +64,16 @@ const App: React.FC = () => {
   const isDemoUser = user?.email === DEMO_EMAIL;
   const [drafts, setDrafts] = useState<{ [id: string]: string }>({});
 
-  const [settings, setSettings] = useState<{
-    businessName: string;
-    signature: string;
-    autoSendAIResponses: boolean;
-    confirmBeforeSend: boolean;
-    bulkReplyMode: 'draft' | 'autoSend';
-    aiPersonality: 'support' | 'rapper' | 'medieval';
-  }>({
+  const DEFAULT_SETTINGS = {
     businessName: '',
     signature: '',
     autoSendAIResponses: false,
     confirmBeforeSend: false,
-    bulkReplyMode: 'draft',
-    aiPersonality: 'support'
-  });
+    bulkReplyMode: 'draft' as 'draft' | 'autoSend',
+    aiPersonality: 'support' as 'support' | 'rapper' | 'medieval',
+  };
+
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
 
   const [sentRepliesByMessage, setSentRepliesByMessage] = useState<{ [messageId: string]: Array<{ body: string; sentAt: string }> }>({});
   const [trashedMessages, setTrashedMessages] = useState<Message[]>([]);
@@ -90,12 +85,31 @@ const App: React.FC = () => {
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
 
-  const handleUpdateSettings = (updated: typeof settings) => {
-    setSettings({ ...settings, ...updated });
+  const handleUpdateSettings = async (updated: typeof settings) => {
+    setSettings(updated);
+    if (!user?.id) return;
+    try {
+      await supabase.from('user_settings').upsert(
+        { user_id: user.id, settings: updated, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+    } catch (e) {
+      console.warn('Failed to persist settings:', e);
+    }
   };
 
-  const handleUpdateAiPersonality = (value: 'support' | 'rapper' | 'medieval') => {
-    setSettings((prev) => ({ ...prev, aiPersonality: value }));
+  const handleUpdateAiPersonality = async (value: 'support' | 'rapper' | 'medieval') => {
+    const updated = { ...settings, aiPersonality: value };
+    setSettings(updated);
+    if (!user?.id) return;
+    try {
+      await supabase.from('user_settings').upsert(
+        { user_id: user.id, settings: updated, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      ).select();
+    } catch (e) {
+      console.warn('Failed to persist settings:', e);
+    }
   };
   const isMountedRef = useRef(true);
   const categorizingIdsRef = useRef<Set<string>>(new Set());
@@ -193,6 +207,28 @@ const App: React.FC = () => {
       startAnomalyWorker(user.id);
     }
     return () => { stopAnomalyWorker(); };
+  }, [user?.id]);
+
+  // Load persisted settings from Supabase on login, reset on logout
+  useEffect(() => {
+    if (!user?.id) {
+      setSettings(DEFAULT_SETTINGS);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('settings')
+          .eq('user_id', user.id)
+          .single();
+        if (!error && data?.settings) {
+          setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+        }
+      } catch (e) {
+        console.warn('Failed to load settings:', e);
+      }
+    })();
   }, [user?.id]);
 
   // Fetch active (non-resolved) incident count for the nav badge
