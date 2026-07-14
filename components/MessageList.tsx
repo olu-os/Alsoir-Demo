@@ -11,6 +11,7 @@ interface MessageListProps {
   onManualSync: () => void;
   drafts: { [id: string]: string };
   demoMode?: boolean;
+  darkMode?: boolean;
   onBulkTrash?: (ids: string[]) => void;
 }
 
@@ -24,12 +25,14 @@ const getChannelIcon = (channel: Channel) => {
   }
 };
 
-const getCategoryColor = (cat: MessageCategory) => {
+const getCategoryColor = (cat: MessageCategory, dm: boolean) => {
   switch (cat) {
-    case MessageCategory.Complaint: return 'bg-red-100 text-red-800 border-red-200';
-    case MessageCategory.Shipping: return 'bg-blue-100 text-blue-800 border-blue-200';
-    case MessageCategory.Custom: return 'bg-purple-100 text-purple-800 border-purple-200';
-    default: return 'bg-slate-100 text-slate-800 border-slate-200';
+    case MessageCategory.Complaint: return dm ? 'bg-red-500/15 text-red-400 border-red-500/20' : 'bg-red-100 text-red-800 border-red-200';
+    case MessageCategory.Shipping: return dm ? 'bg-blue-500/15 text-blue-400 border-blue-500/20' : 'bg-blue-100 text-blue-800 border-blue-200';
+    case MessageCategory.Custom: return dm ? 'bg-purple-500/15 text-purple-400 border-purple-500/20' : 'bg-purple-100 text-purple-800 border-purple-200';
+    case MessageCategory.Returns: return dm ? 'bg-slate-500/15 text-slate-400 border-slate-500/20' : 'bg-amber-100 text-amber-800 border-amber-200';
+    case MessageCategory.Product: return dm ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    default: return dm ? 'bg-slate-500/15 text-slate-400 border-slate-500/20' : 'bg-slate-100 text-slate-800 border-slate-200';
   }
 };
 
@@ -41,7 +44,8 @@ const getCostIndicator = (cost: ResponseCost) => {
     }
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, drafts, demoMode, onBulkTrash }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelect, isLoading, onManualSync, drafts, demoMode, darkMode, onBulkTrash }) => {
+  const dm = darkMode ?? false;
   const [filter, setFilter] = React.useState('');
   const [selectedCategories, setSelectedCategories] = React.useState<MessageCategory[]>([]);
   const [selectedUrgencies, setSelectedUrgencies] = React.useState<ResponseCost[]>([]);
@@ -150,34 +154,34 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
   };
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200 w-full md:w-80 lg:w-96">
-      <div className="p-4 pt-14 lg:pt-4 border-b border-slate-100">
+    <div className={`flex flex-col h-full ${dm ? 'bg-slate-900' : 'bg-white'} border-r ${dm ? 'border-slate-800' : 'border-slate-200'} w-full`}>
+      <div className={`p-4 pt-14 lg:pt-4 border-b ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-slate-800">
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
             Inbox {demoMode && <span className="text-indigo-600">(Demo)</span>}
           </h2>
           <div className="flex items-center space-x-1">
             <button
               onClick={handleBulkTrash}
               disabled={bulkSelectedIds.size === 0}
-              className="p-2 rounded-md hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+              className={`p-2 rounded-md ${dm ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'} disabled:opacity-30 disabled:cursor-not-allowed transition-opacity`}
               title="Trash Selected"
             >
               <Trash2 className="w-5 h-5" />
             </button>
             <button
               onClick={toggleBulkSelectAll}
-              className="p-2 rounded-md hover:bg-slate-100 text-slate-500"
+              className={`p-2 rounded-md ${dm ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
               title={bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0 ? 'Deselect All' : 'Select All'}
             >
               {bulkSelectedIds.size === filteredMessages.length && filteredMessages.length > 0
                     ? <SquareCheck className="w-5 h-5 text-indigo-600" />
-                : <div className="w-5 h-5 rounded border-2 border-slate-300" />}
+                : <div className={`w-5 h-5 rounded border-2 ${dm ? 'border-slate-600' : 'border-slate-300'}`} />}
             </button>
             <button 
               onClick={onManualSync} 
               disabled={isLoading}
-              className="p-2 rounded-md hover:bg-slate-100 text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`p-2 rounded-md ${dm ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'} disabled:opacity-50 disabled:cursor-not-allowed`}
               title="Sync Emails"
             >
               <svg
@@ -204,16 +208,16 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
           <input 
             type="text" 
             placeholder="Search messages..." 
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`w-full pl-9 pr-4 py-2 ${dm ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'} border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-        <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
+        <div className={`flex items-center justify-between mt-3 text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
             <span>{filteredMessages.length} messages</span>
             <button 
               onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-              className={`flex items-center hover:text-slate-800 transition-colors ${isFilterExpanded || selectedCategories.length > 0 || selectedUrgencies.length > 0 ? 'text-indigo-600 font-medium' : ''}`}
+              className={`flex items-center ${dm ? 'hover:text-white' : 'hover:text-slate-800'} transition-colors ${isFilterExpanded || selectedCategories.length > 0 || selectedUrgencies.length > 0 ? 'text-indigo-600 font-medium' : ''}`}
             >
                 <Filter className="w-3 h-3 mr-1" /> Filter
                 {(selectedCategories.length > 0 || selectedUrgencies.length > 0) && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
@@ -221,16 +225,16 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
         </div>
 
         {isFilterExpanded && (
-          <div className="mt-3 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className={`mt-3 p-4 ${dm ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} rounded-xl border space-y-4 animate-in fade-in slide-in-from-top-2 duration-200`}>
             {/* Category Filter */}
             <div>
-              <label className="block text-xs uppercase tracking-wider font-bold text-slate-900 mb-2">Categories</label>
+              <label className={`block text-xs uppercase tracking-wider font-bold ${dm ? 'text-white' : 'text-slate-900'} mb-2`}>Categories</label>
               <div className="flex flex-wrap gap-2">
                 {Object.values(MessageCategory).map(cat => (
                   <button
                     key={cat}
                     onClick={() => toggleCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${selectedCategories.includes(cat) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${selectedCategories.includes(cat) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : `${dm ? 'bg-slate-700 text-slate-300 border-slate-600 hover:border-slate-500' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}`}
                   >
                     {cat}
                   </button>
@@ -240,13 +244,13 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
 
             {/* Urgency Filter */}
             <div>
-              <label className="block text-xs uppercase tracking-wider font-bold text-slate-900 mb-2">Urgency</label>
+              <label className={`block text-xs uppercase tracking-wider font-bold ${dm ? 'text-white' : 'text-slate-900'} mb-2`}>Urgency</label>
               <div className="flex gap-2">
                 {Object.values(ResponseCost).map(cost => (
                   <button
                     key={cost}
                     onClick={() => toggleUrgency(cost)}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${selectedUrgencies.includes(cost) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${selectedUrgencies.includes(cost) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : `${dm ? 'bg-slate-700 text-slate-300 border-slate-600 hover:border-slate-500' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}`}
                   >
                     {cost}
                   </button>
@@ -260,7 +264,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                   setSelectedCategories([]);
                   setSelectedUrgencies([]);
                 }}
-                className="w-full py-2 text-xs text-indigo-600 hover:text-indigo-700 font-semibold transition-colors border-t border-slate-200 mt-2 pt-2"
+                className={`w-full text-xs text-white hover:text-slate-300 font-semibold transition-colors border-t ${dm ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-4`}
               >
                 Clear All Filters
               </button>
@@ -271,16 +275,16 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
 
       <div className="flex-1 overflow-y-auto" ref={listRef} tabIndex={0}>
         {isLoading && filteredMessages.length === 0 ? (
-           <div className="p-8 text-center text-slate-400 text-sm">Analyzing incoming messages...</div>
+           <div className={`p-8 text-center ${dm ? 'text-slate-500' : 'text-slate-400'} text-sm`}>Analyzing incoming messages...</div>
         ) : (
           filteredMessages.map((msg, idx) => (
             <button
               key={msg.id}
               data-msg-idx={idx}
               onClick={() => onSelect(msg.id)}
-              className={`w-full p-4 border-b text-left transition-colors hover:bg-slate-50 group focus:outline-none ${
-                selectedId === msg.id ? 'bg-indigo-50 border-l-4 border-l-indigo-600' : 'border-l-4 border-l-transparent'
-              } ${bulkSelectedIds.has(msg.id) ? 'bg-indigo-50/50' : ''}`}
+              className={`w-full p-4 text-left transition-colors ${dm ? 'border-b border-slate-800 hover:bg-slate-800' : 'border-b border-slate-200 hover:bg-slate-50'} group focus:outline-none ${
+                selectedId === msg.id ? `${dm ? 'bg-indigo-500/10' : 'bg-indigo-50'} border-l-4 border-l-indigo-600` : 'border-l-4 border-l-transparent'
+              } ${bulkSelectedIds.has(msg.id) ? `${dm ? 'bg-indigo-500/5' : 'bg-indigo-50/50'}` : ''}`}
             >
               <div className="flex items-start space-x-2">
                 <div
@@ -289,14 +293,14 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                 >
                   {bulkSelectedIds.has(msg.id)
                 ? <SquareCheck className="w-5 h-5 text-indigo-600" />
-                    : <div className="w-5 h-5 rounded border-2 border-slate-300" />
+                    : <div className={`w-5 h-5 rounded border-2 ${dm ? 'border-slate-600' : 'border-slate-300'}`} />
                   }
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-1">
                     <div className="flex items-center space-x-2">
                         {getChannelIcon(msg.channel)}
-                        <span className={`font-semibold text-sm truncate max-w-[120px] ${!msg.isRead ? 'text-slate-900' : 'text-slate-600'}`}>
+                        <span className={`font-semibold text-sm truncate max-w-[120px] ${!msg.isRead ? (dm ? 'text-white' : 'text-slate-900') : (dm ? 'text-slate-400' : 'text-slate-600')}`}>
                             {msg.senderName}
                         </span>
                         {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
@@ -305,13 +309,13 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
                       {new Date(msg.timestamp).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </span>
                   </div>
-                  <h4 className="text-xs font-medium text-slate-500 mb-1 truncate">{msg.subject || 'No Subject'}</h4>
-                  <p className="text-sm text-slate-600 line-clamp-2 mb-2">
+                  <h4 className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'} mb-1 truncate`}>{msg.subject || 'No Subject'}</h4>
+                  <p className={`text-sm ${dm ? 'text-slate-300' : 'text-slate-600'} line-clamp-2 mb-2`}>
                     {msg.body}
                   </p>
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category)}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryColor(msg.category, dm)}`}>
                           {msg.category}
                       </span>
                       {/* Show Drafting label if a draft exists for this message. */}

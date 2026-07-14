@@ -23,9 +23,11 @@ interface MessageDetailProps {
     confirmBeforeSend?: boolean;
     sentRepliesByMessage: { [messageId: string]: Array<{ body: string; sentAt: string }> };
     onMessageTrashed?: (messageId: string) => void;
+    darkMode?: boolean;
 }
 
-const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, confirmBeforeSend, sentRepliesByMessage, onMessageTrashed }) => {
+const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, policies, onReplySent, drafts, setDrafts, businessName, signature, aiPersonality, onUpdateAiPersonality, bulkReplyMode, confirmBeforeSend, sentRepliesByMessage, onMessageTrashed, darkMode }) => {
+    const dm = darkMode ?? false;
     const [replyTextRaw, setReplyTextRaw] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isFindingSimilar, setIsFindingSimilar] = useState(false);
@@ -89,7 +91,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         const parts = text.split(urlRegex);
         return parts.map((part, i) => {
             if (urlRegex.test(part)) {
-                return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">{part}</a>;
+                return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className={`${dm ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'} underline`}>{part}</a>;
             }
             return part;
         });
@@ -367,20 +369,20 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
     if (!message) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 text-slate-400">
-                <Sparkles className="w-16 h-16 mb-4 text-slate-300" />
+            <div className={`flex-1 flex flex-col items-center justify-center ${dm ? 'bg-slate-950 text-slate-500' : 'bg-slate-50 text-slate-400'}`}>
+                <Sparkles className={`w-16 h-16 mb-4 ${dm ? 'text-slate-600' : 'text-slate-300'}`} />
                 <p className="text-lg">Select a message to send a response</p>
             </div>
         );
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-white relative">
+        <div className={`flex-1 flex flex-col h-full relative ${dm ? 'bg-slate-950' : 'bg-white'}`}>
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
+            <div className={`px-6 py-4 border-b flex justify-between items-start ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
                 <div key={message.id} className="animate-fade-in">
-                    <h1 className="text-xl font-bold text-slate-900 mb-1">{message.subject || 'Conversation'}</h1>
-                    <div className="items-center text-sm text-slate-500">
+                    <h1 className={`text-xl font-bold mb-1 ${dm ? 'text-white' : 'text-slate-900'}`}>{message.subject || 'Conversation'}</h1>
+                    <div className={`items-center text-sm ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
                         <span>From: {message.senderName}</span>
                         <div className="mt-1">{message.channel}: {message.senderHandle}</div>
                     </div>
@@ -389,17 +391,17 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     <div className="relative" ref={dropdownRef}>
                         <button
                             onClick={toggleDropdown}
-                            className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+                            className={`p-2 rounded-full transition-colors ${dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
                         >
                             <MoreHorizontal className="w-5 h-5" />
                         </button>
                         {(dropdownState === 'open' || dropdownState === 'closing') && (
                             <div
-                                className={`absolute right-0 top-full mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1 origin-top-right ${dropdownState === 'open' ? 'animate-scale-in' : 'animate-scale-out'}`}
+                                className={`absolute right-0 top-full mt-1 w-44 rounded-xl border shadow-lg z-50 py-1 origin-top-right ${dropdownState === 'open' ? 'animate-scale-in' : 'animate-scale-out'} ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
                             >
                                 <button
                                     onClick={handleMoveToTrash}
-                                    className="w-full px-4 py-2.5 text-left text-sm text-slate-500 hover:bg-red-50 flex items-center space-x-2 transition-colors"
+                                    className={`w-full px-4 py-2.5 text-left text-sm flex items-center space-x-2 transition-colors ${dm ? 'text-slate-400 hover:bg-red-900/30' : 'text-slate-500 hover:bg-red-50'}`}
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     <span>Move to Trash</span>
@@ -411,27 +413,27 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             </div>
 
             {/* Message Body */}
-            <div key={message.id} className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                <div className="bg-white p-6 sm:mx-10 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
+            <div key={message.id} className={`flex-1 overflow-y-auto p-6 ${dm ? '' : 'bg-slate-50/50'}`}>
+                <div className={`p-6 sm:mx-10 rounded-xl border shadow-sm animate-fade-up ${dm ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${dm ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
                                 {message.senderName[0]}
                             </div>
                             <div>
-                                <div className="font-medium text-slate-900">{message.senderName}</div>
-                                <div className="text-xs text-slate-500">{(() => { const d = new Date(message.timestamp); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
+                                <div className={`font-medium ${dm ? 'text-white' : 'text-slate-900'}`}>{message.senderName}</div>
+                                <div className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{(() => { const d = new Date(message.timestamp); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
                             </div>
                         </div>
                         {message.predictedCost === ResponseCost.High && (
-                            <span className="px-2 py-1 bg-red-50 text-red-600 text-xs font-medium rounded-md border border-red-100">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-md ${dm ? 'bg-red-900/30 text-red-400 border border-red-800/50' : 'bg-red-50 text-red-600 border border-red-100'}`}>
                                 High Priority
                             </span>
                         )}
                     </div>
-                    <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    <div className={`prose prose-sm leading-relaxed whitespace-pre-wrap ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                         {isLoadingBody ? (
-                            <div className="flex items-center space-x-2 text-slate-400">
+                            <div className={`flex items-center space-x-2 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
                                 <RefreshCw className="w-4 h-4 animate-spin" />
                                 <span>Loading message...</span>
                             </div>
@@ -442,7 +444,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                     <div className="mt-6 flex flex-wrap gap-2">
                         {message.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md">#{tag}</span>
+                            <span key={tag} className={`px-2 py-1 text-xs rounded-md ${dm ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>#{tag}</span>
                         ))}
                     </div>
                 </div>
@@ -450,17 +452,17 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 {/* Sent Replies */}
                 {sentRepliesByMessage[message.id]?.map((reply) => (
                     <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 sm:mx-10 animate-fade-up">
-                        <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
+                        <div className={`p-6 rounded-xl border shadow-sm ${dm ? 'bg-indigo-950/30 border-indigo-800/50' : 'bg-indigo-50 border-indigo-200'}`}>
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
                                     You
                                 </div>
                                 <div>
-                                    <div className="font-medium text-slate-900">Your Reply</div>
-                                    <div className="text-xs text-slate-500">{(() => { const d = new Date(reply.sentAt); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
+                                    <div className={`font-medium ${dm ? 'text-white' : 'text-slate-900'}`}>Your Reply</div>
+                                    <div className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{(() => { const d = new Date(reply.sentAt); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
                                 </div>
                             </div>
-                            <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                            <div className={`prose prose-sm leading-relaxed whitespace-pre-wrap ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                                 {renderBody(reply.body)}
                             </div>
                         </div>
@@ -470,13 +472,13 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 {/* Pending Confirmation */}
                 {pendingConfirm && (
                     <div className="mt-6 sm:mx-10 animate-fade-up">
-                        <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed border-indigo-300 shadow-sm">
+                        <div className={`p-6 rounded-xl border-2 border-dashed border-indigo-300 shadow-sm ${dm ? 'bg-slate-900' : 'bg-slate-50'}`}>
                             <div className="flex items-center space-x-3 mb-4">
-                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${dm ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-600'}`}>
                                     <Clock className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <div className="font-medium text-slate-900">
+                                    <div className={`font-medium ${dm ? 'text-white' : 'text-slate-900'}`}>
                                         {pendingConfirmBulkCount > 0
                                             ? `Pending Confirmation — ${pendingConfirmBulkCount + 1} recipients`
                                             : 'Pending Confirmation'
@@ -484,7 +486,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                     </div>
                                 </div>
                             </div>
-                            <div className="prose prose-sm ml-2 text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
+                            <div className={`prose prose-sm ml-2 leading-relaxed whitespace-pre-wrap mb-4 ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                                 {pendingConfirm.replaceAll('{NAME}', getFirstName(message?.senderName))}
                             </div>
                             <div className="flex ml-1 items-center space-x-2">
@@ -497,7 +499,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 </button>
                                 <button
                                     onClick={handleCancelConfirm}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+                                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${dm ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                                 >
                                     <X className="w-4 h-4" />
                                     <span>Cancel</span>
@@ -512,17 +514,17 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                 {/* Similar Messages Panel */}
                 {(similarMessages.length > 0 || isDismissingSimilar) && (
                     <div ref={similarPanelRef} className={`mt-6 sm:mx-10 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                        <div className={`border rounded-xl p-4 ${dm ? 'bg-indigo-950/20 border-indigo-800/40' : 'bg-indigo-50 border-indigo-100'}`}>
                             <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
+                                <div className={`flex items-center space-x-2 font-semibold ${dm ? 'text-indigo-200' : 'text-indigo-900'}`}>
                                     <Users className="w-5 h-5" />
                                     <span>Similar Messages Found ({similarMessages.length})</span>
                                 </div>
-                                <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-1 rounded-full">
+                                <span className={`text-xs px-2 py-1 rounded-full ${dm ? 'text-indigo-300 bg-indigo-800/50' : 'text-indigo-600 bg-indigo-100'}`}>
                                     Bulk Reply Mode
                                 </span>
                             </div>
-                            <p className="text-sm text-indigo-700 mb-3">
+                            <p className={`text-sm mb-3 ${dm ? 'text-indigo-300' : 'text-indigo-700'}`}>
                                 {bulkReplyMode === 'draft'
                                     ? 'The AI detected similar issues. Select messages to draft the same response (names will be auto-adjusted).'
                                     : 'The AI detected similar issues. Select messages to send the same response (names will be auto-adjusted).'}
@@ -533,23 +535,23 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         key={similar.id}
                                         onClick={() => toggleSimilarMessage(similar.id)}
                                         className={`flex items-start p-3 rounded-lg border cursor-pointer transition-all ${selectedSimilarIds.has(similar.id)
-                                                ? 'bg-white border-indigo-300 shadow-sm'
-                                                : 'bg-indigo-50/50 border-transparent hover:bg-white/50'
+                                                ? `${dm ? 'bg-slate-800 border-indigo-600 shadow-sm' : 'bg-white border-indigo-300 shadow-sm'}`
+                                                : `${dm ? 'bg-slate-900/50 border-slate-700/50 hover:bg-slate-800' : 'bg-indigo-50/50 border-transparent hover:bg-white/50'}`
                                             }`}
                                     >
-                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 ${selectedSimilarIds.has(similar.id) ? 'bg-indigo-600 border-indigo-600' : 'border-indigo-300'
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 ${selectedSimilarIds.has(similar.id) ? 'bg-indigo-600 border-indigo-600' : `${dm ? 'border-slate-600' : 'border-indigo-300'}`
                                             }`}>
                                             {selectedSimilarIds.has(similar.id) && <Check className="w-3 h-3 text-white" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-center mb-0.5">
-                                                <span className="font-medium text-sm text-slate-900">{similar.senderName}</span>
-                                                <span className="text-xs text-slate-400">{(() => { const d = new Date(similar.timestamp); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}` })()}</span>
+                                                <span className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-900'}`}>{similar.senderName}</span>
+                                                <span className={`text-xs ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{(() => { const d = new Date(similar.timestamp); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}` })()}</span>
                                             </div>
                                             <div className="flex items-center justify-between">
-                                                <p className="text-xs text-slate-600 truncate">{similar.body}</p>
+                                                <p className={`text-xs truncate ${dm ? 'text-slate-400' : 'text-slate-600'}`}>{similar.body}</p>
                                                 {similar.isReplied && (
-                                                    <span className="text-xs text-purple-600 font-medium ml-2 whitespace-nowrap">Replied</span>
+                                                    <span className={`text-xs font-medium ml-2 whitespace-nowrap ${dm ? 'text-purple-400' : 'text-purple-600'}`}>Replied</span>
                                                 )}
                                             </div>
                                         </div>
@@ -568,7 +570,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         setIsDismissingSimilar(false);
                                     }, 200);
                                 }}
-                                className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors shadow-sm text-sm font-medium"
+                                className={`px-4 py-2 rounded-lg transition-colors shadow-sm text-sm font-medium ${dm ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                             >
                                 Cancel
                             </button>
@@ -578,17 +580,18 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             </div>
 
             {/* Reply Area */}
-            <div className="p-6 bg-white border-t border-slate-200">
+            <div className={`p-6 border-t ${dm ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="max-w-3xl mx-auto">
                     {/* AI Controls */}
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-slate-700">Reply</h3>
+                        <h3 className={`text-sm font-semibold ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Reply</h3>
                         <div className="flex flex-col items-end space-y-2 relative">
                             <PersonalityDropdown
                                 value={aiPersonality}
                                 onChange={onUpdateAiPersonality}
                                 compact
                                 rightAlign
+                                darkMode={dm}
                             />
                             <div className="flex items-center space-x-2">
                                 {similarMessages.length === 0 && (
@@ -596,7 +599,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                         <button
                                             onClick={handleFindSimilar}
                                             disabled={isFindingSimilar}
-                                            className="flex items-center space-x-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium disabled:opacity-50"
+                                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 ${dm ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                                         >
                                             {isFindingSimilar ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                                             <span>{isFindingSimilar ? 'Scanning...' : 'Find Similar'}</span>
@@ -611,7 +614,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                 <button
                                     onClick={handleGenerateReply}
                                     disabled={isGenerating}
-                                    className="flex items-center space-x-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium disabled:opacity-50"
+                                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 ${dm ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
                                 >
                                     {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                                     <span>{isGenerating ? 'Drafting...' : 'Generate with AI'}</span>
@@ -622,7 +625,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                     <div className="relative">
                         {isSending ? (
-                            <div className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm leading-relaxed text-slate-700 flex space-x-2">
+                            <div className={`w-full h-40 p-4 border rounded-xl text-sm leading-relaxed flex space-x-2 ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                                 <RefreshCw className="w-4 h-4 animate-spin" />
                                 <span>Sending...</span>
                             </div>
@@ -648,7 +651,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                     }
                                 }}
                                 placeholder="Type your reply here..."
-                                className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed"
+                                className={`w-full h-40 p-4 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none text-sm leading-relaxed ${dm ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'}`}
                             />
                         )}
 
@@ -724,7 +727,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                         </div>
                     </div>
 
-                    <div className="mt-2 text-xs text-slate-400 flex justify-between">
+                    <div className={`mt-2 text-xs flex justify-between ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
                         <span>
                             {pendingConfirm
                                 ? 'Press Enter to confirm, Esc to cancel'
@@ -735,7 +738,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                             const allIds = [message.id, ...Array.from(selectedSimilarIds as Set<string>).filter(id => id !== message.id)];
                             const allDraftsExist = allIds.every(id => drafts[id]);
                             if (selectedSimilarIds.size > 0 && !allDraftsExist) {
-                                return <span className="text-indigo-600 font-medium">✨ Bulk reply active</span>;
+                                return <span className={`${dm ? 'text-indigo-400' : 'text-indigo-600'} font-medium`}>✨ Bulk reply active</span>;
                             }
                             return null;
                         })()}

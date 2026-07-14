@@ -10,6 +10,7 @@ export interface AppSettings {
   confirmBeforeSend: boolean;
   bulkReplyMode: 'autoSend' | 'draft';
   aiPersonality: 'support' | 'rapper' | 'medieval';
+  darkMode: boolean;
 }
 export enum MessageCategory {
   Shipping = 'Shipping',

@@ -28,7 +28,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
       fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between h-full border-r border-slate-800
       transform transition-transform duration-300 ease-in-out
       ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-      lg:relative lg:translate-x-0 lg:w-64
+      lg:relative lg:translate-x-0 lg:w-60
     `}>
       <div>
         <div className="h-24 flex items-center justify-start px-4 border-b border-slate-800">

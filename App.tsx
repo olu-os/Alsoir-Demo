@@ -75,6 +75,7 @@ const App: React.FC = () => {
     confirmBeforeSend: false,
     bulkReplyMode: 'draft' as 'draft' | 'autoSend',
     aiPersonality: 'support' as 'support' | 'rapper' | 'medieval',
+    darkMode: false,
   };
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -1042,7 +1043,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className={`flex h-screen overflow-hidden ${settings.darkMode ? 'bg-slate-950' : 'bg-white'}`}>
       {/* Mobile overlay */}
       {mobileNavOpen && (
         <div
@@ -1066,8 +1067,8 @@ const App: React.FC = () => {
           <button
             onClick={() => setMobileNavOpen(true)}
             className={`lg:hidden fixed mt-3 left-3 z-20 p-2 rounded-lg border transition-colors ${
-              currentView === 'observability'
-                ? 'bg-slate-950 border-slate-800 text-white hover:bg-slate-900'
+              settings.darkMode
+                ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -1082,13 +1083,13 @@ const App: React.FC = () => {
             {/* Inbox List Column */}
             <div
               className={`
-                shrink-0 h-full relative overflow-hidden border-slate-200
-                transition-[width,border-width] duration-300 ease-in-out
+                shrink-0 h-full relative overflow-hidden
+                transition-[width] duration-300 ease-in-out
                 ${selectedMessageId
                   ? focusMode
-                    ? 'hidden lg:block lg:w-0 lg:border-r-0'
-                    : 'hidden lg:block lg:w-96 lg:border-r'
-                  : 'block w-full lg:w-96 lg:border-r'
+                    ? 'hidden lg:block lg:w-0'
+                    : 'hidden lg:block lg:w-80'
+                  : 'block w-full lg:w-80'
                 }
               `}
             >
@@ -1101,13 +1102,16 @@ const App: React.FC = () => {
                 drafts={drafts}
                 demoMode={isDemoUser}
                 onBulkTrash={handleBulkTrash}
+                darkMode={settings.darkMode}
               />
             </div>
 
             {/* Message Detail Column */}
             <div className={`
                 ${!selectedMessageId ? 'hidden lg:flex' : 'flex'} 
-                flex-1 flex-col h-full bg-slate-50 relative
+                flex-1 flex-col h-full relative
+                ${settings.darkMode ? 'bg-slate-950' : 'bg-slate-50'}
+                ${selectedMessageId ? settings.darkMode ? 'lg:border-l lg:border-slate-800' : 'lg:border-l lg:border-slate-200' : ''}
             `}>
                 {showSyncedToast && (
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">
@@ -1115,16 +1119,16 @@ const App: React.FC = () => {
                   </div>
                 )}
                 {selectedMessageId && (
-                     <div className="flex items-center border-b border-slate-200 bg-white">
+                     <div className={`flex items-center border-b ${settings.darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}>
                          <button 
                              onClick={() => { setSelectedMessageId(null); setFocusMode(false); }}
-                             className="lg:hidden p-3 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                             className={`lg:hidden p-3 rounded-lg transition-colors ${settings.darkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
                          >
                              <ChevronLeft className="w-5 h-5" />
                          </button>
                          <button
                              onClick={() => setFocusMode(!focusMode)}
-                             className="p-4 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors lg:block hidden"
+                             className={`p-3 rounded-lg transition-colors lg:block hidden ${settings.darkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
                              title={focusMode ? 'Show inbox' : 'Focus on message'}
                          >
                              {focusMode ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
@@ -1146,6 +1150,7 @@ const App: React.FC = () => {
                   confirmBeforeSend={settings.confirmBeforeSend}
                    sentRepliesByMessage={sentRepliesByMessage}
                   onMessageTrashed={handleMessageTrashed}
+                  darkMode={settings.darkMode}
                 />
             </div>
           </>
@@ -1159,11 +1164,12 @@ const App: React.FC = () => {
               onBulkRestore={handleBulkRestore}
               onBulkDelete={handleBulkPermanentDelete}
               isLoading={isLoadingTrash}
+              darkMode={settings.darkMode}
             />
         )}
 
         {currentView === 'policies' && (
-            <PolicySettings policies={policies} onUpdatePolicies={handleUpdatePolicies} />
+            <PolicySettings policies={policies} onUpdatePolicies={handleUpdatePolicies} darkMode={settings.darkMode} />
         )}
 
         {currentView === 'settings' && (
