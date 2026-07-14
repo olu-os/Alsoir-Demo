@@ -1,6 +1,7 @@
 import React from 'react';
 import { User } from '@supabase/supabase-js';
 import { AppSettings } from '../types';
+import PersonalityDropdown from './PersonalityDropdown';
 
 interface SettingsPageProps {
   user: User | null;
@@ -14,7 +15,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
     };
 
   return (
-    <div className="flex-1 bg-slate-50 p-6 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 p-6 pt-14 lg:pt-6 overflow-y-auto">
       <div className="max-w-3xl mx-auto">
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
@@ -25,7 +26,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
           {/* Bulk Reply Mode Setting */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-2">Bulk Reply Mode</h2>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setBulkReplyMode('draft')}
                 className={`px-4 py-2 rounded-lg font-medium transition-colors ${settings.bulkReplyMode === 'draft' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}
@@ -39,7 +40,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
                 Auto-Send
               </button>
             </div>
-            <p className="text-xs text-slate-500 mt-2">Choose whether bulk reply sends immediately or generates drafts for all selected recipients.</p>
+            <p className="text-xs text-slate-500 mt-2">Choose whether bulk reply drafts or sends messages immediately.</p>
           </div>
 
           {/* Confirm Before Send */}
@@ -51,9 +52,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
               </div>
               <button
                 onClick={() => onUpdateSettings({ ...settings, confirmBeforeSend: !settings.confirmBeforeSend })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.confirmBeforeSend ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${settings.confirmBeforeSend ? 'bg-indigo-600' : 'bg-slate-300'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.confirmBeforeSend ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-2 w-2 transform rounded-full bg-white transition-transform ${settings.confirmBeforeSend ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
           </div>
@@ -62,16 +63,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-2">AI Personality</h2>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Personality</label>
-              <select
+              <PersonalityDropdown
                 value={settings.aiPersonality || 'support'}
-                onChange={(e) => onUpdateSettings({ ...settings, aiPersonality: e.target.value as any })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-500 focus:outline-none bg-white"
-              >
-                <option value="support">Customer Support Agent (Default)</option>
-                <option value="rapper">Rapper</option>
-                <option value="medieval">Medieval Alfred</option>
-              </select>
+                onChange={(v) => onUpdateSettings({ ...settings, aiPersonality: v })}
+              />
               <p className="text-xs text-slate-500">Changes the tone of generated drafts.</p>
             </div>
           </div>

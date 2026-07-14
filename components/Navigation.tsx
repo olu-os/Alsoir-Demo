@@ -6,9 +6,11 @@ interface NavigationProps {
   onChangeView: (view: string) => void;
   onLogout: () => void;
   activeIncidentCount: number;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout, activeIncidentCount }) => {
+const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLogout, activeIncidentCount, isOpen, onClose }) => {
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'policies', label: 'Policies', icon: FileText },
@@ -16,21 +18,31 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
     ...(import.meta.env.DEV ? [{ id: 'observability', label: 'Observability', icon: ChartNoAxesCombined  }] : []),
   ];
 
+  const handleNav = (view: string) => {
+    onChangeView(view);
+    onClose?.();
+  };
+
   return (
-    <div className="w-20 lg:w-64 bg-slate-900 text-slate-300 flex flex-col justify-between h-full border-r border-slate-800 transition-all duration-300">
+    <div className={`
+      fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between h-full border-r border-slate-800
+      transform transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      lg:relative lg:translate-x-0 lg:w-64
+    `}>
       <div>
-        <div className="h-16 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
-          <div className="bg-indigo-600 p-0.5 rounded-lg">
-            <img src="/logo.png" alt="Alsoir Logo" className="w-10 h-10" />
+        <div className="h-24 flex items-center justify-start px-4 border-b border-slate-800">
+          <div className="bg-indigo-600 p-2 rounded-lg">
+            <img src="/logo.png" alt="Alsoir Logo" className="w-8 h-8" />
           </div>
-          <span className="ml-3 font-bold text-white text-lg hidden lg:block">Alsoir</span>
+          <span className="ml-3 font-bold text-white text-lg">Alsoir</span>
         </div>
 
-        <nav className="mt-6 px-2 lg:px-4 space-y-2">
+        <nav className="mt-6 px-4 space-y-2">
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => onChangeView(item.id)}
+              onClick={() => handleNav(item.id)}
               className={`w-full flex items-center p-3 rounded-lg transition-colors ${
                 currentView === item.id
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
@@ -38,9 +50,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
               }`}
             >
               <item.icon className="w-6 h-6 flex-shrink-0" />
-              <span className="ml-3 font-medium hidden lg:block flex-2 text-left">{item.label}</span>
+              <span className="ml-3 font-medium flex-2 text-left">{item.label}</span>
               {item.id === 'observability' && activeIncidentCount > 0 && (
-                <span className="hidden lg:inline-flex items-center justify-center w-6 h-6 ml-3 bg-indigo-600 text-white-900 text-xs font-semibold rounded-full">
+                <span className="inline-flex items-center justify-center w-6 h-6 ml-3 bg-indigo-600 text-white-900 text-xs font-semibold rounded-full">
                   {activeIncidentCount}
                 </span>
               )}
@@ -51,7 +63,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
 
       <div className="p-4 border-t border-slate-800">
         <button 
-          onClick={() => onChangeView('settings')}
+          onClick={() => handleNav('settings')}
           className={`w-full flex items-center p-3 rounded-lg transition-colors ${
             currentView === 'settings'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
@@ -59,14 +71,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeView, onLo
           }`}
         >
           <Settings className="w-6 h-6 flex-shrink-0" />
-          <span className="ml-3 font-medium hidden lg:block">Settings</span>
+          <span className="ml-3 font-medium">Settings</span>
         </button>
         <button 
-          onClick={onLogout}
+          onClick={() => { onLogout(); onClose?.(); }}
           className="w-full flex items-center p-3 mt-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
         >
           <LogOut className="w-6 h-6 flex-shrink-0" />
-          <span className="ml-3 font-medium hidden lg:block">Logout</span>
+          <span className="ml-3 font-medium">Logout</span>
         </button>
       </div>
     </div>

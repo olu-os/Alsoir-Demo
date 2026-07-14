@@ -82,63 +82,61 @@ const TrashFolder: React.FC<TrashFolderProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
-      <div className="p-6 border-b border-slate-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Trash</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Messages are automatically deleted after 30 days
-            </p>
-          </div>
+      <div className="p-4 pt-14 lg:pt-6 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900">Trash</h1>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-sm text-slate-500">
+            Messages are automatically deleted after 30 days
+          </p>
           {trashedMessages.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={toggleSelectAll}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                {selectedIds.size === trashedMessages.length ? 'Deselect All' : 'Select All'}
-              </button>
-            </div>
+            <button
+              onClick={toggleSelectAll}
+              className="px-2 py-1.5 ml-3 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+            >
+              {selectedIds.size === trashedMessages.length ? 'Deselect All' : 'Select All'}
+            </button>
           )}
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="mt-4 flex items-center space-x-3 p-3 bg-indigo-50 rounded-xl border border-indigo-200">
+          <div className="mt-4 flex flex-wrap items-center gap-2 p-3 bg-indigo-50 rounded-xl border border-indigo-200">
             <span className="text-sm font-medium text-indigo-900">
               {selectedIds.size} selected
             </span>
             <div className="flex-1" />
-            <button
-              onClick={handleBulkRestore}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-            >
-              <Undo2 className="w-4 h-4" />
-              <span>Restore</span>
-            </button>
-            {confirmBulkDelete ? (
-              <div className="flex items-center space-x-1">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleBulkRestore}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex-shrink-0"
+              >
+                <Undo2 className="w-4 h-4" />
+                <span>Restore</span>
+              </button>
+              {confirmBulkDelete ? (
+                <>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    Confirm Delete
+                  </button>
+                  <button
+                    onClick={() => setConfirmBulkDelete(false)}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
                 <button
                   onClick={handleBulkDelete}
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-white text-slate-700 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-sm font-medium flex-shrink-0"
                 >
-                  Confirm Delete
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete</span>
                 </button>
-                <button
-                  onClick={() => setConfirmBulkDelete(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleBulkDelete}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-white text-slate-700 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-sm font-medium"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Permanently</span>
-              </button>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -201,7 +199,7 @@ const TrashFolder: React.FC<TrashFolderProps> = ({
                       {msg.subject || 'No Subject'}
                     </h4>
                     <p className="text-sm text-slate-600 line-clamp-2 mb-3">{msg.body}</p>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2 justify-end">
                       <button
                         onClick={() => onRestore(msg.id)}
                         className="flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"

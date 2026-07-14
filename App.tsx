@@ -17,7 +17,7 @@ import { analyzeMessageContent } from './services/AIMessageService';
 import { supabase } from './services/supabaseClient';
 import { decodeHtmlEntities } from './services/text';
 import { logEvent } from './services/telemetry';
-import { Undo2 } from 'lucide-react';
+import { Undo2, Menu, PanelLeftClose, PanelLeft, ChevronLeft } from 'lucide-react';
 
 
 
@@ -61,6 +61,8 @@ const App: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<BusinessPolicy[]>(INITIAL_POLICIES);
   const [isLoading, setIsLoading] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const isDemoUser = user?.email === DEMO_EMAIL;
@@ -1041,20 +1043,55 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      <Navigation currentView={currentView} onChangeView={setCurrentView} onLogout={handleLogout} activeIncidentCount={activeIncidentCount} />
+      {/* Mobile overlay */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
+      <Navigation
+        currentView={currentView}
+        onChangeView={setCurrentView}
+        onLogout={handleLogout}
+        activeIncidentCount={activeIncidentCount}
+        isOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Mobile hamburger */}
+        {!(currentView === 'inbox' && selectedMessageId) && (
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className={`lg:hidden fixed mt-3 left-3 z-20 p-2 rounded-lg border transition-colors ${
+              currentView === 'observability'
+                ? 'bg-slate-950 border-slate-800 text-white hover:bg-slate-900'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
         {/* Reliability Layer 1: User-visible status — only shows when there's an active incident */}
         <StatusBanner userId={user.id} currentView={currentView} />
         <div className="flex-1 flex overflow-hidden">
         {currentView === 'inbox' && (
           <>
             {/* Inbox List Column */}
-            <div className={`
-                ${selectedMessageId ? 'hidden lg:block' : 'w-full'} 
-                lg:w-96 border-r border-slate-200 h-full
-                relative
-            `}>
+            <div
+              className={`
+                shrink-0 h-full relative overflow-hidden border-slate-200
+                transition-[width,border-width] duration-300 ease-in-out
+                ${selectedMessageId
+                  ? focusMode
+                    ? 'hidden lg:block lg:w-0 lg:border-r-0'
+                    : 'hidden lg:block lg:w-96 lg:border-r'
+                  : 'block w-full lg:w-96 lg:border-r'
+                }
+              `}
+            >
               <MessageList 
                 messages={messages} 
                 selectedId={selectedMessageId} 
@@ -1069,7 +1106,7 @@ const App: React.FC = () => {
 
             {/* Message Detail Column */}
             <div className={`
-                ${!selectedMessageId ? 'hidden lg:flex' : 'w-full flex'} 
+                ${!selectedMessageId ? 'hidden lg:flex' : 'flex'} 
                 flex-1 flex-col h-full bg-slate-50 relative
             `}>
                 {showSyncedToast && (
@@ -1078,12 +1115,21 @@ const App: React.FC = () => {
                   </div>
                 )}
                 {selectedMessageId && (
-                     <button 
-                        onClick={() => setSelectedMessageId(null)}
-                        className="lg:hidden p-4 text-indigo-600 font-medium flex items-center bg-white border-b border-slate-200"
-                     >
-                        ← Back to Inbox
-                     </button>
+                     <div className="flex items-center border-b border-slate-200 bg-white">
+                         <button 
+                             onClick={() => { setSelectedMessageId(null); setFocusMode(false); }}
+                             className="lg:hidden p-3 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                         >
+                             <ChevronLeft className="w-5 h-5" />
+                         </button>
+                         <button
+                             onClick={() => setFocusMode(!focusMode)}
+                             className="p-4 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors lg:block hidden"
+                             title={focusMode ? 'Show inbox' : 'Focus on message'}
+                         >
+                             {focusMode ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+                         </button>
+                     </div>
                 )}
                <MessageDetail 
                   message={selectedMessage} 

@@ -79,39 +79,38 @@ const PolicySettings: React.FC<PolicySettingsProps> = ({ policies, onUpdatePolic
   };
 
   return (
-    <div className="flex-1 bg-slate-50 p-6 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 p-6 pt-14 lg:pt-6 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">Business Policies</h1>
-                <p className="text-slate-500 mt-1">These policies are used by the AI to generate accurate replies.</p>
+        <div className="mb-8">
+            <h1 className="text-2xl font-bold text-slate-900">Policies</h1>
+            <p className="text-slate-500 mt-1">These policies are used by the AI to generate accurate replies.</p>
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              <button
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Undo2 className="w-4 h-4" />
+                <span className="text-sm">Undo</span>
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Redo2 className="w-4 h-4" />
+                <span className="text-sm">Redo</span>
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges}
+                className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Changes</span>
+              </button>
             </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
-              className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Undo2 className="w-4 h-4" />
-              <span className="text-sm">Undo</span>
-            </button>
-            <button
-              onClick={handleRedo}
-              disabled={redoStack.length === 0}
-              className="flex items-center space-x-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Redo2 className="w-4 h-4" />
-              <span className="text-sm">Redo</span>
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges}
-              className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Changes</span>
-            </button>
-          </div>
         </div>
 
         <div className="space-y-6">

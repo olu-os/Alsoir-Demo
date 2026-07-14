@@ -3,7 +3,8 @@ import { Message, BusinessPolicy, ResponseCost } from '../types';
 import { generateDraftReply, findSimilarMessages } from '../services/AIMessageService';
 import { supabase } from '../services/supabaseClient';
 import { decodeHtmlEntities } from '../services/text';
-import { Send, Sparkles, RefreshCw, MoreHorizontal, Forward, Users, Check, X, Trash2, Clock } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, MoreHorizontal, Users, Check, X, Trash2, Clock } from 'lucide-react';
+import PersonalityDropdown from './PersonalityDropdown';
 
 const bodyCache = new Map<string, string>();
 
@@ -31,7 +32,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     const [similarMessages, setSimilarMessages] = useState<Message[]>([]);
     const [selectedSimilarIds, setSelectedSimilarIds] = useState<Set<string>>(new Set());
     const [isDismissingSimilar, setIsDismissingSimilar] = useState(false);
-    const [showTaskToast, setShowTaskToast] = useState(false);
     const [showNoSimilarToast, setShowNoSimilarToast] = useState(false);
     const [dropdownState, setDropdownState] = useState<'closed' | 'open' | 'closing'>('closed');
     const [isSending, setIsSending] = useState(false);
@@ -312,11 +312,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
         closeDropdown();
     };
 
-    const handleForwardToTask = () => {
-        setShowTaskToast(true);
-        setTimeout(() => setShowTaskToast(false), 3000);
-    };
-
     const [draftsGeneratedFor, setDraftsGeneratedFor] = useState<string[]>([]);
 
     const handleSend = async () => {
@@ -385,22 +380,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
                 <div key={message.id} className="animate-fade-in">
                     <h1 className="text-xl font-bold text-slate-900 mb-1">{message.subject || 'Conversation'}</h1>
-                    <div className="flex items-center space-x-2 text-sm text-slate-500">
-                        <span>From: <span className="font-medium text-slate-700">{message.senderName}</span></span>
-                        <span>•</span>
-                        <span>{message.channel}</span>
-                        <span>•</span>
-                        <span>{message.senderHandle}</span>
+                    <div className="items-center text-sm text-slate-500">
+                        <span>From: {message.senderName}</span>
+                        <div className="mt-1">{message.channel}: {message.senderHandle}</div>
                     </div>
                 </div>
                 <div className="flex space-x-2 items-start">
-                    <button
-                        onClick={handleForwardToTask}
-                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors flex items-center space-x-1"
-                        title="Forward to Task Manager"
-                    >
-                        <Forward className="w-5 h-5" />
-                    </button>
                     <div className="relative" ref={dropdownRef}>
                         <button
                             onClick={toggleDropdown}
@@ -414,7 +399,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                             >
                                 <button
                                     onClick={handleMoveToTrash}
-                                    className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
+                                    className="w-full px-4 py-2.5 text-left text-sm text-slate-500 hover:bg-red-50 flex items-center space-x-2 transition-colors"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     <span>Move to Trash</span>
@@ -427,7 +412,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
             {/* Message Body */}
             <div key={message.id} className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                <div className="bg-white p-6 mx-20 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
+                <div className="bg-white p-6 sm:mx-10 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
@@ -464,7 +449,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Sent Replies */}
                 {sentRepliesByMessage[message.id]?.map((reply) => (
-                    <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 mx-20 animate-fade-up">
+                    <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 sm:mx-10 animate-fade-up">
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
@@ -484,7 +469,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Pending Confirmation */}
                 {pendingConfirm && (
-                    <div className="mt-6 mx-20 animate-fade-up">
+                    <div className="mt-6 sm:mx-10 animate-fade-up">
                         <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed border-indigo-300 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
@@ -526,7 +511,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Similar Messages Panel */}
                 {(similarMessages.length > 0 || isDismissingSimilar) && (
-                    <div ref={similarPanelRef} className={`mt-6 mx-20 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
+                    <div ref={similarPanelRef} className={`mt-6 sm:mx-10 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
                         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
@@ -599,16 +584,12 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-semibold text-slate-700">Reply</h3>
                         <div className="flex flex-col items-end space-y-2 relative">
-                            <select
+                            <PersonalityDropdown
                                 value={aiPersonality}
-                                onChange={(e) => onUpdateAiPersonality(e.target.value as 'support' | 'rapper' | 'medieval')}
-                                className="h-8 px-2 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-1 focus:ring-slate-500 outline-none"
-                                title="AI Personality"
-                            >
-                                <option value="support">Support</option>
-                                <option value="rapper">Rapper</option>
-                                <option value="medieval">Medieval Alfred</option>
-                            </select>
+                                onChange={onUpdateAiPersonality}
+                                compact
+                                rightAlign
+                            />
                             <div className="flex items-center space-x-2">
                                 {similarMessages.length === 0 && (
                                     <div className="relative">
@@ -763,19 +744,6 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
             </div>
 
             {/* Toast Notification */}
-            {showTaskToast && (
-                <div className="absolute top-4 right-4 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center space-x-3 animate-bounce-in z-50">
-                    <div className="bg-green-500 p-1 rounded-full">
-                        <Send className="w-3 h-3 text-white" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium">Forwarded to Tasks</p>
-                        <p className="text-xs text-slate-400">Added to your daily todo list</p>
-
-                        <p className="text-xs text-slate-400 mt-0.8">(Feature coming soon)</p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
