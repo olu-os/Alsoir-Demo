@@ -83,7 +83,7 @@ const PolicySettings: React.FC<PolicySettingsProps> = ({ policies, onUpdatePolic
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900">Policies</h1>
-            <p className="text-slate-500 mt-1">These policies are used by the AI to generate accurate replies.</p>
+            <p className="text-sm text-slate-500 mt-1">These policies are used by the AI to generate accurate replies.</p>
             <div className="flex flex-wrap items-center gap-2 mt-4">
               <button
                 onClick={handleUndo}

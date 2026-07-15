@@ -81,22 +81,20 @@ const TrashFolder: React.FC<TrashFolderProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 min-w-0 overflow-hidden">
-      <div className="p-4 pt-14 lg:pt-6 border-b border-slate-200 bg-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Trash</h1>
-            <p className="text-sm text-slate-500">
-              Messages are automatically deleted after 30 days
-            </p>
-          </div>
-          {trashedMessages.length > 0 && (
-            <button
-              onClick={toggleSelectAll}
+      <div className="p-6 pt-14 lg:pt-6 border-b border-slate-200 bg-white">
+        <div className="mmx-auto">
+          <h1 className="text-2xl font-bold text-slate-900">Trash</h1>
+          <p className="text-sm text-slate-500 mt-1">Messages are automatically deleted after 30 days.</p>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            {trashedMessages.length > 0 && (
+              <button
+                onClick={toggleSelectAll}
               className="self-start px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-            >
-              {selectedIds.size === trashedMessages.length ? 'Deselect All' : 'Select All'}
-            </button>
-          )}
+              >
+                {selectedIds.size === trashedMessages.length ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+          </div>
         </div>
 
         {selectedIds.size > 0 && (
