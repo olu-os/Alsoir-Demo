@@ -1060,7 +1060,7 @@ const App: React.FC = () => {
         onClose={() => setMobileNavOpen(false)}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
         {/* Mobile hamburger */}
         {!(currentView === 'inbox' && selectedMessageId) && (
           <button
@@ -1074,9 +1074,9 @@ const App: React.FC = () => {
             <Menu className="w-5 h-5" />
           </button>
         )}
-        {/* Reliability Layer 1: User-visible status — only shows when there's an active incident */}
+        {/* Reliability Layer 1: Only shows when there's an active incident */}
         <StatusBanner userId={user.id} currentView={currentView} />
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 min-w-0 flex overflow-hidden">
         {currentView === 'inbox' && (
           <>
             {/* Inbox List Column */}
@@ -1107,7 +1107,7 @@ const App: React.FC = () => {
             {/* Message Detail Column */}
             <div className={`
                 ${!selectedMessageId ? 'hidden lg:flex' : 'flex'} 
-                flex-1 flex-col h-full bg-slate-50 relative
+                flex-1 min-w-0 flex-col h-full bg-slate-50 relative
             `}>
                 {showSyncedToast && (
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">

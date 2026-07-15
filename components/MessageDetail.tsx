@@ -375,11 +375,11 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-white relative">
+        <div className="flex-1 min-w-0 flex flex-col h-full bg-white relative">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
-                <div key={message.id} className="animate-fade-in">
-                    <h1 className="text-xl font-bold text-slate-900 mb-1">{message.subject || 'Conversation'}</h1>
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex justify-between items-start gap-4">
+                <div key={message.id} className="animate-fade-in min-w-0">
+                    <h1 className="text-xl font-bold text-slate-900 mb-1 break-words">{message.subject || 'Conversation'}</h1>
                     <div className="items-center text-sm text-slate-500">
                         <span>From: {message.senderName}</span>
                         <div className="mt-1">{message.channel}: {message.senderHandle}</div>
@@ -412,7 +412,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
             {/* Message Body */}
             <div key={message.id} className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                <div className="bg-white p-6 sm:mx-10 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
+                <div className="bg-white p-6 sm:mx-4 rounded-xl border border-slate-200 shadow-sm animate-fade-up">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
@@ -429,7 +429,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                             </span>
                         )}
                     </div>
-                    <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                            <div className="prose prose-sm max-w-none break-words overflow-wrap-anywhere text-slate-700 leading-relaxed whitespace-pre-wrap">
                         {isLoadingBody ? (
                             <div className="flex items-center space-x-2 text-slate-400">
                                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -449,7 +449,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Sent Replies */}
                 {sentRepliesByMessage[message.id]?.map((reply) => (
-                    <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 sm:mx-10 animate-fade-up">
+                    <div key={`${reply.sentAt}-${reply.body.slice(0, 20)}`} className="mt-6 sm:mx-4 animate-fade-up">
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
@@ -460,7 +460,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                     <div className="text-xs text-slate-500">{(() => { const d = new Date(reply.sentAt); return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` })()}</div>
                                 </div>
                             </div>
-                            <div className="prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    <div className="prose prose-sm max-w-none break-words overflow-wrap-anywhere text-slate-700 leading-relaxed whitespace-pre-wrap">
                                 {renderBody(reply.body)}
                             </div>
                         </div>
@@ -469,7 +469,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Pending Confirmation */}
                 {pendingConfirm && (
-                    <div className="mt-6 sm:mx-10 animate-fade-up">
+                    <div className="mt-6 sm:mx-4 animate-fade-up">
                         <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed border-indigo-300 shadow-sm">
                             <div className="flex items-center space-x-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
@@ -484,7 +484,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
                                     </div>
                                 </div>
                             </div>
-                            <div className="prose prose-sm ml-2 text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
+                            <div className="prose prose-sm ml-2 max-w-none break-words overflow-wrap-anywhere text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
                                 {pendingConfirm.replaceAll('{NAME}', getFirstName(message?.senderName))}
                             </div>
                             <div className="flex ml-1 items-center space-x-2">
@@ -511,7 +511,7 @@ const MessageDetail: React.FC<MessageDetailProps> = ({ message, allMessages, pol
 
                 {/* Similar Messages Panel */}
                 {(similarMessages.length > 0 || isDismissingSimilar) && (
-                    <div ref={similarPanelRef} className={`mt-6 sm:mx-10 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
+                    <div ref={similarPanelRef} className={`mt-6 sm:mx-4 max-w-3xl scroll-mt-6 ${isDismissingSimilar ? 'animate-fade-out-fast' : 'animate-fade-up'}`}>
                         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center space-x-2 text-indigo-900 font-semibold">

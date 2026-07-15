@@ -45,18 +45,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
 
           {/* Confirm Before Send */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Confirm Before Send</h2>
-                <p className="text-xs text-slate-500 mt-1">Replies show a confirmation step before sending.</p>
-              </div>
-              <button
-                onClick={() => onUpdateSettings({ ...settings, confirmBeforeSend: !settings.confirmBeforeSend })}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${settings.confirmBeforeSend ? 'bg-indigo-600' : 'bg-slate-300'}`}
-              >
-                <span className={`inline-block h-2 w-2 transform rounded-full bg-white transition-transform ${settings.confirmBeforeSend ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
+            <h2 className="text-lg font-bold text-slate-800">Confirm Before Send</h2>
+            <button
+              onClick={() => onUpdateSettings({ ...settings, confirmBeforeSend: !settings.confirmBeforeSend })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 mt-3 ${settings.confirmBeforeSend ? 'bg-indigo-600' : 'bg-slate-300'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.confirmBeforeSend ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <p className="text-xs text-slate-500 mt-3">Replies show a confirmation step before sending.</p>
           </div>
 
           {/* AI Personality */}

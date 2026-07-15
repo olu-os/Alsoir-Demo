@@ -150,7 +150,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, selectedId, onSelec
   };
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200 w-full md:w-80 lg:w-96">
+    <div className="flex flex-col h-full bg-white border-r border-slate-200 w-full md:w-80 lg:w-96 min-w-0">
       <div className="p-4 pt-14 lg:pt-4 border-b border-slate-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-slate-800">
