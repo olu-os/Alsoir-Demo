@@ -17,9 +17,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, settings, onUpdateSet
   return (
     <div className="flex-1 bg-slate-50 p-6 pt-14 lg:pt-6 overflow-y-auto">
       <div className="max-w-3xl mx-auto">
-        <header className="mb-8">
+        <header className="mb-3">
           <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-          <p className="text-slate-500">Configure how SoloSupport AI interacts with your customers.</p>
+          <p className="text-sm text-slate-500 mt-1">Configure how Alsoir interacts with your customers.</p>
         </header>
 
         <section className="space-y-6">
